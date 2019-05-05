@@ -5022,6 +5022,7 @@ int dolby_vision_parse_metadata(
 	u32 graphic_max = 100; /* 1 */
 	int ret_flags = 0;
 	int ret = -1;
+	bool melFlag = false;
 
 	memset(&req, 0, (sizeof(struct provider_aux_req_s)));
 	memset(&el_req, 0, (sizeof(struct provider_aux_req_s)));
@@ -5149,6 +5150,9 @@ int dolby_vision_parse_metadata(
 				vf_notify_provider_by_name("dvbldec",
 					VFRAME_EVENT_RECEIVER_DOLBY_BYPASS_EL,
 					(void *)&req);
+			if (ret_flags == 1) {
+				melFlag = true;
+			}
 			if (!is_dv_standard_es(req.dv_enhance_exist,
 				ret_flags, w)) {
 				src_format = FORMAT_SDR;
@@ -5740,7 +5744,7 @@ int dolby_vision_parse_metadata(
 		graphic_max * 10000,
 		dolby_vision_target_min,
 		dolby_vision_target_max[src_format][dst_format] * 10000,
-		(!el_flag) ||
+		(!el_flag && !melFlag) ||
 		(dolby_vision_flags & FLAG_DISABLE_COMPOSER),
 		&hdr10_param,
 		&new_dovi_setting);
