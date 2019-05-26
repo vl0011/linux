@@ -716,10 +716,69 @@ struct am_ioctl_parm_ptr {
 	u32 len; /*char reserved[4]; */
 };
 
+struct vframe_qos_s {
+	int num;
+	int type;
+	int size;
+	int pts;
+	int max_qp;
+	int avg_qp;
+	int min_qp;
+	int max_skip;
+	int avg_skip;
+	int min_skip;
+	int max_mv;
+	int min_mv;
+	int avg_mv;
+	int decode_buffer;
+} /*vframe_qos */;
+
+enum FRAME_FORMAT {
+	FRAME_FORMAT_UNKNOWN,
+	FRAME_FORMAT_PROGRESS,
+	FRAME_FORMAT_INTERLACE,
+};
+
+#define QOS_FRAME_NUM 60
+struct av_info_t {
+	/*auido info*/
+	int sample_rate;
+	int channels;
+	int aformat_type;
+	unsigned int apts;
+	unsigned int apts_err;
+	/*video info*/
+	unsigned int width;
+	unsigned int height;
+	unsigned int dec_error_count;
+	unsigned int first_pic_coming;
+	unsigned int fps;
+	unsigned int current_fps;
+	unsigned int vpts;
+	unsigned int vpts_err;
+	unsigned int ts_error;
+	unsigned int first_vpts;
+	int vformat_type;
+	enum FRAME_FORMAT frame_format;
+	unsigned int toggle_frame_count;/*toggle frame count*/
+	unsigned int dec_err_frame_count;/*vdec error frame count*/
+	unsigned int dec_frame_count;/*vdec frame count*/
+	unsigned int dec_drop_frame_count;/*drop frame num*/
+	int tsync_mode;
+};
+
+struct av_param_info_t {
+	struct av_info_t av_info;
+};
+struct av_param_qosinfo_t {
+	struct vframe_qos_s vframe_qos[QOS_FRAME_NUM];
+};
+
 #define SUPPORT_VDEC_NUM	(20)
+
 int vcodec_profile_register(const struct codec_profile_t *vdec_profile);
 ssize_t vcodec_profile_read(char *buf);
-
+bool is_support_profile(char *name);
 #ifdef __KERNEL__
 #include <linux/interrupt.h>
 
