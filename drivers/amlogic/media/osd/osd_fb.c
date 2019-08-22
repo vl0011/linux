@@ -746,12 +746,12 @@ static int osd_set_par(struct fb_info *info)
 
 	output_index = get_output_device_id(fbdev->fb_index);
 
-#ifdef CONFIG_ARCH_MESON64_ODROIDN2
+#ifdef CONFIG_ARCH_MESON64_ODROID_COMMON
 	info->var.xres_virtual = info->var.xres;
 	info->var.yres_virtual = info->var.yres;
 #endif
 
-#ifdef CONFIG_ARCH_MESON64_ODROIDN2
+#ifdef CONFIG_ARCH_MESON64_ODROID_COMMON
 	info->var.xres_virtual = info->var.xres;
 	info->var.yres_virtual = info->var.yres;
 #endif

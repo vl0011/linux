@@ -767,7 +767,7 @@ static int aml_card_parse_gpios(struct device_node *node,
 
 		pr_info("add line-out mute controls\n");
 	}
-#if !defined(CONFIG_ARCH_MESON64_ODROIDN2)
+#if !defined(CONFIG_ARCH_MESON64_ODROID_COMMON)
 	priv->avout_mute_desc = gpiod_get(dev,
 				"avout_mute",
 				GPIOD_OUT_HIGH);

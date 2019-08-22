@@ -21,7 +21,7 @@
 #include <linux/spinlock.h>
 
 #include <media/rc-core.h>
-#if defined(CONFIG_ARCH_MESON64_ODROIDN2)
+#if defined(CONFIG_ARCH_MESON64_ODROID_COMMON)
 #include <linux/amlogic/iomap.h>
 #endif
 
@@ -93,14 +93,14 @@ static void meson_ir_set_mask(struct meson_ir *ir, unsigned int reg,
 static irqreturn_t meson_ir_irq(int irqno, void *dev_id)
 {
 	struct meson_ir *ir = dev_id;
-#if !defined(CONFIG_ARCH_MESON64_ODROIDN2)
+#if !defined(CONFIG_ARCH_MESON64_ODROID_COMMON)
 	u32 duration;
 	DEFINE_IR_RAW_EVENT(rawir);
 #endif
 
 	spin_lock(&ir->lock);
 
-#if defined(CONFIG_ARCH_MESON64_ODROIDN2)
+#if defined(CONFIG_ARCH_MESON64_ODROID_COMMON)
 	ir_raw_event_store_edge(ir->rc,
 		(readl(ir->reg + IR_DEC_STATUS) & STATUS_IR_DEC_IN)
 		? IR_PULSE : IR_SPACE);
@@ -144,7 +144,7 @@ static int meson_ir_probe(struct platform_device *pdev)
 	const char *map_name;
 	struct meson_ir *ir;
 	int ret;
-#if defined(CONFIG_ARCH_MESON64_ODROIDN2)
+#if defined(CONFIG_ARCH_MESON64_ODROID_COMMON)
 	unsigned int reg_val;
 	bool pulse_inverted = false;
 #endif
@@ -186,7 +186,7 @@ static int meson_ir_probe(struct platform_device *pdev)
 	ir->rc->timeout = MS_TO_NS(125);
 	ir->rc->max_timeout = MS_TO_NS(1250);
 	ir->rc->driver_name = DRIVER_NAME;
-#if defined(CONFIG_ARCH_MESON64_ODROIDN2)
+#if defined(CONFIG_ARCH_MESON64_ODROID_COMMON)
 	pulse_inverted = of_property_read_bool(node, "pulse-inverted");
 #endif
 
@@ -207,7 +207,7 @@ static int meson_ir_probe(struct platform_device *pdev)
 		goto out_unreg;
 	}
 
-#if defined(CONFIG_ARCH_MESON64_ODROIDN2)
+#if defined(CONFIG_ARCH_MESON64_ODROID_COMMON)
 	/* Set remote_input alternative function - GPIOAO.BIT5 */
 	reg_val = aml_read_aobus(AO_RTI_PIN_MUX_REG);
 	reg_val |= (0x1 << 20); /* [23:20], func1 IR_REMOTE_IN */
@@ -234,7 +234,7 @@ static int meson_ir_probe(struct platform_device *pdev)
 	/* IRQ on rising and falling edges */
 	meson_ir_set_mask(ir, IR_DEC_REG1, REG1_IRQSEL_MASK,
 			  REG1_IRQSEL_RISE_FALL);
-#if defined(CONFIG_ARCH_MESON64_ODROIDN2)
+#if defined(CONFIG_ARCH_MESON64_ODROID_COMMON)
 	/* Set polarity Invert input polarity */
 	meson_ir_set_mask(ir, IR_DEC_REG1, REG1_POL,
 			pulse_inverted ? REG1_POL : 0);

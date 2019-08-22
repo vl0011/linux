@@ -30,7 +30,7 @@
 /* Local Headers */
 #include "osd_hw.h"
 #include "osd_log.h"
-#ifdef CONFIG_ARCH_MESON64_ODROIDN2
+#ifdef CONFIG_ARCH_MESON64_ODROID_COMMON
 #include "osd_fb.h"
 #endif
 
@@ -192,7 +192,7 @@ int set_osd_logo_freescaler(void)
 	s32 dst_y_start = 0, dst_y_end = 0;
 	s32 target_x_end = 0, target_y_end = 0;
 
-#ifdef CONFIG_ARCH_MESON64_ODROIDN2
+#ifdef CONFIG_ARCH_MESON64_ODROID_COMMON
 	struct osd_fb_dev_s *fb_dev;
 
 	fb_dev = gp_fbdev_list[0];
