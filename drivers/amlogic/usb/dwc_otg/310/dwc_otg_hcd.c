@@ -41,6 +41,31 @@
 #include "dwc_otg_hcd.h"
 #include "dwc_otg_regs.h"
 
+#if defined(CONFIG_ARCH_MESON64_ODROIDC2)
+
+#include <linux/timer.h>
+#include <linux/workqueue.h>
+
+struct hcd_vbus_reset {
+	struct workqueue_struct *workq;
+	struct delayed_work dwork;
+	dwc_otg_core_if_t *core_if;
+};
+
+static struct hcd_vbus_reset *g_vbus_reset;
+
+static void vbus_reset_worker(struct work_struct *work)
+{
+	struct hcd_vbus_reset *vbus_reset = container_of(work,
+			struct hcd_vbus_reset, dwork.work);
+
+	dwc_otg_set_vbus_power(vbus_reset->core_if, 0);
+	dwc_mdelay(100);
+	dwc_otg_set_vbus_power(vbus_reset->core_if, 1);
+}
+
+#endif
+
 dwc_otg_hcd_t *dwc_otg_hcd_alloc_hcd(void)
 {
 	return DWC_ALLOC(sizeof(dwc_otg_hcd_t));
@@ -992,6 +1017,16 @@ int dwc_otg_hcd_init(dwc_otg_hcd_t *hcd, dwc_otg_core_if_t *core_if)
 	hcd->periodic_qh_count = 0;
 	hcd->flags.d32 = 0;
 out:
+#if defined(CONFIG_ARCH_MESON64_ODROIDC2)
+	g_vbus_reset = kzalloc(sizeof(struct hcd_vbus_reset), GFP_KERNEL);
+	if (g_vbus_reset) {
+		g_vbus_reset->workq = alloc_ordered_workqueue("%s",
+					WQ_MEM_RECLAIM | WQ_FREEZABLE,
+					"vbus-reset-wq");
+		g_vbus_reset->core_if = core_if;
+		INIT_DELAYED_WORK(&g_vbus_reset->dwork, vbus_reset_worker);
+	}
+#endif
 	return retval;
 }
 
@@ -1001,6 +1036,11 @@ void dwc_otg_hcd_remove(dwc_otg_hcd_t *hcd)
 	dwc_otg_disable_host_interrupts(hcd->core_if);
 
 	dwc_otg_hcd_free(hcd);
+#if defined(CONFIG_ARCH_MESON64_ODROIDC2)
+	cancel_delayed_work_sync(&g_vbus_reset->dwork);
+	destroy_workqueue(g_vbus_reset->workq);
+	kfree(g_vbus_reset);
+#endif
 }
 
 /**
@@ -1044,6 +1084,12 @@ static void dwc_otg_hcd_reinit(dwc_otg_hcd_t *hcd)
 
 	/* Set core_if's lock pointer to the hcd->lock */
 	hcd->core_if->lock = hcd->lock;
+
+#if defined(CONFIG_ARCH_MESON64_ODROIDC2)
+	cancel_delayed_work_sync(&g_vbus_reset->dwork);
+	queue_delayed_work(g_vbus_reset->workq, &g_vbus_reset->dwork,
+		msecs_to_jiffies(1000));
+#endif
 }
 
 /**
