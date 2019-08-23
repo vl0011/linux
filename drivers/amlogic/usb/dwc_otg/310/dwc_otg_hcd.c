@@ -59,9 +59,17 @@ static void vbus_reset_worker(struct work_struct *work)
 	struct hcd_vbus_reset *vbus_reset = container_of(work,
 			struct hcd_vbus_reset, dwork.work);
 
-	dwc_otg_set_vbus_power(vbus_reset->core_if, 0);
-	dwc_mdelay(100);
-	dwc_otg_set_vbus_power(vbus_reset->core_if, 1);
+	static bool state = 0;
+
+	dwc_otg_set_vbus_power(vbus_reset->core_if, state);
+
+	if (!state) {
+		state = 1;
+		queue_delayed_work(vbus_reset->workq, &vbus_reset->dwork,
+			msecs_to_jiffies(500));
+	}
+	else
+		state = 0;
 }
 
 #endif
@@ -158,6 +166,12 @@ static void hcd_start_func(void *_vp)
 	DWC_DEBUGPL(DBG_HCDV, "%s() %p\n", __func__, hcd);
 	if (hcd)
 		hcd->fops->start(hcd);
+
+#if defined(CONFIG_ARCH_MESON64_ODROIDC2)
+	flush_workqueue(g_vbus_reset->workq);
+	queue_delayed_work(g_vbus_reset->workq, &g_vbus_reset->dwork,
+		msecs_to_jiffies(500));
+#endif
 }
 
 static void del_xfer_timers(dwc_otg_hcd_t *hcd)
@@ -1084,12 +1098,6 @@ static void dwc_otg_hcd_reinit(dwc_otg_hcd_t *hcd)
 
 	/* Set core_if's lock pointer to the hcd->lock */
 	hcd->core_if->lock = hcd->lock;
-
-#if defined(CONFIG_ARCH_MESON64_ODROIDC2)
-	cancel_delayed_work_sync(&g_vbus_reset->dwork);
-	queue_delayed_work(g_vbus_reset->workq, &g_vbus_reset->dwork,
-		msecs_to_jiffies(1000));
-#endif
 }
 
 /**
