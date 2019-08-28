@@ -50,6 +50,7 @@ struct hcd_vbus_reset {
 	struct workqueue_struct *workq;
 	struct delayed_work dwork;
 	dwc_otg_core_if_t *core_if;
+	bool need;
 };
 
 static struct hcd_vbus_reset *g_vbus_reset;
@@ -59,17 +60,13 @@ static void vbus_reset_worker(struct work_struct *work)
 	struct hcd_vbus_reset *vbus_reset = container_of(work,
 			struct hcd_vbus_reset, dwork.work);
 
-	static bool state = 0;
-
-	dwc_otg_set_vbus_power(vbus_reset->core_if, state);
-
-	if (!state) {
-		state = 1;
-		queue_delayed_work(vbus_reset->workq, &vbus_reset->dwork,
-			msecs_to_jiffies(500));
+	if (vbus_reset->need) {
+		dwc_otg_set_vbus_power(vbus_reset->core_if, 0);
+		dwc_mdelay(300);
+		dwc_otg_set_vbus_power(vbus_reset->core_if, 1);
+		dwc_mdelay(300);
+		DWC_PRINTF("otg vbus reset\n");
 	}
-	else
-		state = 0;
 }
 
 #endif
@@ -168,9 +165,10 @@ static void hcd_start_func(void *_vp)
 		hcd->fops->start(hcd);
 
 #if defined(CONFIG_ARCH_MESON64_ODROIDC2)
+	g_vbus_reset->need = 1;
 	flush_workqueue(g_vbus_reset->workq);
 	queue_delayed_work(g_vbus_reset->workq, &g_vbus_reset->dwork,
-		msecs_to_jiffies(500));
+			msecs_to_jiffies(1000));
 #endif
 }
 
@@ -361,6 +359,16 @@ static int32_t dwc_otg_hcd_disconnect_cb(void *p)
 		hcchar_data_t hcchar;
 
 		DWC_PRINTF("Disconnect cb-Host\n");
+
+#if defined(CONFIG_ARCH_MESON64_ODROIDC2)
+		if (g_vbus_reset->need)
+			 g_vbus_reset->need = 0;
+		else
+			 g_vbus_reset->need = 1;
+
+		DWC_PRINTF("need vbus reset ? %d\n", g_vbus_reset->need);
+#endif
+
 		if (dwc_otg_hcd->core_if->otg_ver == 1)
 			del_xfer_timers(dwc_otg_hcd);
 		else
@@ -2723,6 +2731,12 @@ int dwc_otg_hcd_hub_control(dwc_otg_hcd_t *dwc_otg_hcd,
 				 * the reset is started within 1ms of the HNP
 				 * success interrupt. */
 				if (!dwc_otg_hcd_is_b_host(dwc_otg_hcd)) {
+#if defined(CONFIG_ARCH_MESON64_ODROIDC2)
+					flush_workqueue(g_vbus_reset->workq);
+					queue_delayed_work(g_vbus_reset->workq,
+						&g_vbus_reset->dwork,
+						msecs_to_jiffies(1000));
+#endif
 					hprt0.b.prtpwr = 1;
 					hprt0.b.prtrst = 1;
 					DWC_PRINTF("dwc_otg: Indeed ");
