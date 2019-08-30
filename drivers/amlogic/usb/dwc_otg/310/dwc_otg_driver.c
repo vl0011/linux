@@ -626,6 +626,66 @@ static void dwc_otg_set_force_id(dwc_otg_core_if_t *core_if, int mode)
 }
 
 #define VBUS_POWER_GPIO_OWNER  "DWC_OTG"
+
+#if defined(CONFIG_ARCH_MESON64_ODROIDC2)
+#include <linux/timer.h>
+#include <linux/workqueue.h>
+
+struct dwc_power_reset {
+	struct workqueue_struct *workq;
+	struct delayed_work dwork;
+	struct gpio_desc *hub_gd, *usb_gd;
+	dwc_otg_core_if_t *core_if;
+};
+
+static struct dwc_power_reset *g_dwc_power_reset;
+
+void dwc_power_reset_worker(struct work_struct *work)
+{
+	struct dwc_power_reset *dwc_reset = container_of(work,
+			struct dwc_power_reset, dwork.work);
+
+	if(dwc_otg_is_host_mode(dwc_reset->core_if)) {
+		dwc_otg_power_notifier_call(0);
+
+		if (dwc_reset->usb_gd != NULL)
+			gpiod_direction_output(dwc_reset->usb_gd, 0);
+	}
+	if (dwc_reset->hub_gd != NULL)
+		gpiod_direction_output(dwc_reset->hub_gd, 0);
+	mdelay(500);
+
+	if (dwc_reset->hub_gd != NULL)
+		gpiod_direction_output(dwc_reset->hub_gd, 1);
+
+	if(dwc_otg_is_host_mode(dwc_reset->core_if)) {
+		if (dwc_reset->usb_gd != NULL)
+			gpiod_direction_output(dwc_reset->usb_gd, 1);
+
+		dwc_otg_power_notifier_call(1);
+	}
+
+	mdelay(500);
+
+	DWC_PRINTF("%s : otg_host = %d, usb_gd = %p, hub_gd = %p\n",
+		__func__, dwc_otg_is_host_mode(dwc_reset->core_if),
+		dwc_reset->usb_gd, dwc_reset->hub_gd);
+}
+
+void dwc_power_reset(int delay_ms)
+{
+	if (g_dwc_power_reset) {
+		cancel_delayed_work_sync(&g_dwc_power_reset->dwork);
+		queue_delayed_work(g_dwc_power_reset->workq, &g_dwc_power_reset->dwork,
+				msecs_to_jiffies(delay_ms));
+		DWC_PRINTF("%s\n", __func__);
+	}
+}
+
+EXPORT_SYMBOL(dwc_power_reset);
+
+#endif
+
 void set_usb_vbus_power(struct gpio_desc *usb_gd, int pin, char is_power_on)
 {
 	if (is_power_on) {
@@ -762,6 +822,13 @@ static int dwc_otg_driver_remove(struct platform_device *pdev)
 	 */
 	platform_set_drvdata(pdev, 0);
 
+#if defined(CONFIG_ARCH_MESON64_ODROIDC2)
+	if (g_dwc_power_reset) {
+		cancel_delayed_work_sync(&g_dwc_power_reset->dwork);
+		destroy_workqueue(g_dwc_power_reset->workq);
+		kfree(g_dwc_power_reset);
+	}
+#endif
 	return 0;
 }
 
@@ -919,12 +986,31 @@ static int dwc_otg_driver_probe(struct platform_device *pdev)
 	const void *prop;
 	dwc_otg_device_t *dwc_otg_device;
 	struct gpio_desc *usb_gd = NULL;
+#if defined(CONFIG_ARCH_MESON64_ODROIDC2)
+	struct gpio_desc *hub_gd = NULL;
+#endif
 	struct dwc_otg_driver_module_params *pcore_para;
 	static int dcount;
 	char sys_name[8] = "dwc2_a";
 
 	dev_dbg(&pdev->dev, "dwc_otg_driver_probe(%p)\n", pdev);
 
+#if defined(CONFIG_ARCH_MESON64_ODROIDC2)
+	if (!g_dwc_power_reset) {
+		g_dwc_power_reset =
+			kzalloc(sizeof(struct dwc_power_reset), GFP_KERNEL);
+
+		if (g_dwc_power_reset) {
+			g_dwc_power_reset->workq = alloc_ordered_workqueue("%s",
+						WQ_MEM_RECLAIM | WQ_FREEZABLE,
+						"g_dwc_power_reset-wq");
+
+			INIT_DELAYED_WORK(&g_dwc_power_reset->dwork,
+						dwc_power_reset_worker);
+			DWC_PRINTF("%s : g_dwc_power_reset enable\n", __func__);
+		}
+	}
+#endif
 	if (dcount == 0) {
 		dcount++;
 		usbdev = (struct device *)&pdev->dev;
@@ -981,21 +1067,18 @@ static int dwc_otg_driver_probe(struct platform_device *pdev)
 				if (prop)
 					gpio_work_mask = of_read_ulong(prop, 1);
 			}
-
 #if defined(CONFIG_ARCH_MESON64_ODROIDC2)
 			gpio_name = of_get_property(of_node,
 						"gpio-hub-rst", NULL);
 			if (gpio_name) {
-				struct gpio_desc *hub_gd =
+				hub_gd =
 					gpiod_get_index(&pdev->dev, NULL, 0);
 				if (IS_ERR(hub_gd))
 					return -1;
 
 				gpiod_direction_output(hub_gd, 0);
-				mdelay(20);
+				mdelay(100);
 				gpiod_direction_output(hub_gd, 1);
-				mdelay(20);
-				gpiod_put(hub_gd);
 			}
 #endif
 			prop = of_get_property(of_node, "host-only-core", NULL);
@@ -1323,6 +1406,16 @@ static int dwc_otg_driver_probe(struct platform_device *pdev)
 	dwc_otg_device->usb_early_suspend.resume = usb_early_resume;
 	dwc_otg_device->usb_early_suspend.param = dwc_otg_device;
 	register_early_suspend(&dwc_otg_device->usb_early_suspend);
+#endif
+#if defined(CONFIG_ARCH_MESON64_ODROIDC2)
+	if (g_dwc_power_reset) {
+		if (hub_gd != NULL)
+			g_dwc_power_reset->hub_gd = hub_gd;
+		if (usb_gd != NULL)
+			g_dwc_power_reset->usb_gd = usb_gd;
+
+		g_dwc_power_reset->core_if = dwc_otg_device->core_if;
+	}
 #endif
 	return 0;
 
