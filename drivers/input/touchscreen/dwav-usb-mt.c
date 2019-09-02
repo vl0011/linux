@@ -16,6 +16,11 @@
 #include <linux/input/mt.h>
 
 //[*]-------------------------------------------------------------------------[*]
+// from drivers/amlogic/usb/dwc_otg/310/dwc_otg_driver.c
+//[*]-------------------------------------------------------------------------[*]
+extern void dwc_power_reset(int delay_ms);
+
+//[*]-------------------------------------------------------------------------[*]
 #define USB_VENDOR_ID_DWAV	0x0eef	/* 800 x 480, 7" DWAV touch */
 #define USB_DEVICE_ID_VU7	0x0005
 
@@ -162,6 +167,35 @@ static int __init touch_invert_y_para_setup(char *s)
 __setup("touch_invert_y=", touch_invert_y_para_setup);
 
 /*-------------------------------------------------------------------------*/
+static int dwav_usb_mt_packet_validates(struct dwav_usb_mt *dwav_usb_mt)
+{
+	struct device *dev = &dwav_usb_mt->interface->dev;
+	int	id, max_x, max_y, max_finger;
+
+	max_x      = DEV_INFO[dwav_usb_mt->dev_id].max_x;
+	max_y      = DEV_INFO[dwav_usb_mt->dev_id].max_y;
+	max_finger = DEV_INFO[dwav_usb_mt->dev_id].max_finger;
+
+	for (id = 0; id < max_finger; id++)	{
+		if (dwav_usb_mt->finger[id].x > max_x ||
+		    dwav_usb_mt->finger[id].y > max_y) {
+			unsigned char buffer[128], *p = dwav_usb_mt->data, i, pos;
+
+			memset(buffer, 0x00, sizeof(buffer));
+			for(i = 0, pos = 0; i < dwav_usb_mt->data_size; i++)
+				pos += sprintf(&buffer[pos], "%02x ", p[i]);
+
+			dev_err(dev, "%s - error!\n", __func__);
+			dev_err(dev, "packet : %s\n", buffer);
+			/* OTG & HOST Power Reset after 500ms */
+			dwc_power_reset(500);
+			return	1;
+		}
+	}
+	return	0;
+}
+
+//[*]-------------------------------------------------------------------------[*]
 static void dwav_usb_mt_report(struct dwav_usb_mt *dwav_usb_mt)
 {
 	int	id, max_x, max_y, max_press, max_finger;
@@ -217,44 +251,45 @@ static void dwav_usb_mt_report(struct dwav_usb_mt *dwav_usb_mt)
 static void dwav_usb_mt_process(struct dwav_usb_mt *dwav_usb_mt,
 		unsigned char *pkt, int len)
 {
-	struct  dwav_raw *dwav_raw = (struct dwav_raw *)pkt;
-	unsigned char bit_mask, cnt;
+    struct  dwav_raw    *dwav_raw = (struct dwav_raw *)pkt;
+    unsigned char       bit_mask, cnt;
 
-	for(cnt = 0, bit_mask = 0x01; cnt < DEV_INFO[dwav_usb_mt->dev_id].max_finger; cnt++, bit_mask <<= 1)   {
-		if((dwav_raw->ids & bit_mask) && dwav_raw->press)	{
-			dwav_usb_mt->finger[cnt].status = TS_EVENT_PRESS;
-			switch(cnt) {
-				case	0:
-					dwav_usb_mt->finger[cnt].x = cpu_to_be16(dwav_raw->x1);
-					dwav_usb_mt->finger[cnt].y = cpu_to_be16(dwav_raw->y1);
-					break;
-				case	1:
-					dwav_usb_mt->finger[cnt].x = cpu_to_be16(dwav_raw->x2);
-					dwav_usb_mt->finger[cnt].y = cpu_to_be16(dwav_raw->y2);
-					break;
-				case	2:
-					dwav_usb_mt->finger[cnt].x = cpu_to_be16(dwav_raw->x3);
-					dwav_usb_mt->finger[cnt].y = cpu_to_be16(dwav_raw->y3);
-					break;
-				case	3:
-					dwav_usb_mt->finger[cnt].x = cpu_to_be16(dwav_raw->x4);
-					dwav_usb_mt->finger[cnt].y = cpu_to_be16(dwav_raw->y4);
-					break;
-				case	4:
-					dwav_usb_mt->finger[cnt].x = cpu_to_be16(dwav_raw->x5);
-					dwav_usb_mt->finger[cnt].y = cpu_to_be16(dwav_raw->y5);
-					break;
-				default :
-					break;
-			}
-		}
-		else	{
-			if(dwav_usb_mt->finger[cnt].status == TS_EVENT_PRESS)
-				dwav_usb_mt->finger[cnt].status = TS_EVENT_RELEASE;
-			else
-				dwav_usb_mt->finger[cnt].status = TS_EVENT_UNKNOWN;
-		}
-	}
+    for(cnt = 0, bit_mask = 0x01; cnt < DEV_INFO[dwav_usb_mt->dev_id].max_finger; cnt++, bit_mask <<= 1)   {
+        if((dwav_raw->ids & bit_mask) && dwav_raw->press)    {
+            dwav_usb_mt->finger[cnt].status = TS_EVENT_PRESS;
+            switch(cnt) {
+                case    0:
+                    dwav_usb_mt->finger[cnt].x = cpu_to_be16(dwav_raw->x1);
+                    dwav_usb_mt->finger[cnt].y = cpu_to_be16(dwav_raw->y1);
+                    break;
+                case    1:
+                    dwav_usb_mt->finger[cnt].x = cpu_to_be16(dwav_raw->x2);
+                    dwav_usb_mt->finger[cnt].y = cpu_to_be16(dwav_raw->y2);
+                    break;
+                case    2:
+                    dwav_usb_mt->finger[cnt].x = cpu_to_be16(dwav_raw->x3);
+                    dwav_usb_mt->finger[cnt].y = cpu_to_be16(dwav_raw->y3);
+                    break;
+                case    3:
+                    dwav_usb_mt->finger[cnt].x = cpu_to_be16(dwav_raw->x4);
+                    dwav_usb_mt->finger[cnt].y = cpu_to_be16(dwav_raw->y4);
+                    break;
+                case    4:
+                    dwav_usb_mt->finger[cnt].x = cpu_to_be16(dwav_raw->x5);
+                    dwav_usb_mt->finger[cnt].y = cpu_to_be16(dwav_raw->y5);
+                    break;
+                default :
+                    break;
+            }
+        }
+        else    {
+            if(dwav_usb_mt->finger[cnt].status == TS_EVENT_PRESS)
+                dwav_usb_mt->finger[cnt].status = TS_EVENT_RELEASE;
+            else
+                dwav_usb_mt->finger[cnt].status = TS_EVENT_UNKNOWN;
+        }
+    }
+    if (!dwav_usb_mt_packet_validates(dwav_usb_mt))
 	dwav_usb_mt_report(dwav_usb_mt);
 }
 
@@ -266,27 +301,26 @@ static void dwav_usb_mt_irq(struct urb *urb)
 	int retval;
 
 	switch (urb->status) {
-		case 0:
-			/* success */
-			break;
-		case -ETIME:
-			/* this urb is timing out */
-			dev_dbg(dev, "%s - urb timed out - was the device unplugged?\n", __func__);
-			return;
-		case -ECONNRESET:
-		case -ENOENT:
-		case -ESHUTDOWN:
-		case -EPIPE:
-			/* this urb is terminated, clean up */
-			dev_dbg(dev, "%s - urb shutting down with status: %d\n", __func__, urb->status);
-			return;
-		default:
-			dev_dbg(dev, "%s - nonzero urb status received: %d\n", __func__, urb->status);
-			goto exit;
+    	case 0:
+    		/* success */
+		dwav_usb_mt_process(dwav_usb_mt, dwav_usb_mt->data,
+					urb->actual_length);
+    		break;
+    	case -ETIME:
+    		/* this urb is timing out */
+    		dev_dbg(dev, "%s - urb timed out - was the device unplugged?\n", __func__);
+    		return;
+    	case -ECONNRESET:
+    	case -ENOENT:
+    	case -ESHUTDOWN:
+    	case -EPIPE:
+    		/* this urb is terminated, clean up */
+    		dev_dbg(dev, "%s - urb shutting down with status: %d\n", __func__, urb->status);
+    		return;
+    	default:
+    		dev_dbg(dev, "%s - nonzero urb status received: %d\n", __func__, urb->status);
+    		goto exit;
 	}
-
-	dwav_usb_mt_process(dwav_usb_mt, dwav_usb_mt->data, urb->actual_length);
-
 exit:
 	usb_mark_last_busy(interface_to_usbdev(dwav_usb_mt->interface));
 	if ((retval = usb_submit_urb(urb, GFP_ATOMIC))) {

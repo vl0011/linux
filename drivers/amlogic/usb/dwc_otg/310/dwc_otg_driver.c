@@ -69,7 +69,6 @@
 #include <mach/usbclock.h>
 #include <mach/usb.h>
 
-
 #define DWC_DRIVER_VERSION	"3.10a 12-MAY-2014"
 #define DWC_DRIVER_DESC		"HS OTG USB Controller driver"
 
@@ -682,6 +681,66 @@ static void dwc_otg_set_force_id(dwc_otg_core_if_t *core_if,int mode)
 }
 
 #define VBUS_POWER_GPIO_OWNER  "DWC_OTG"
+
+#if defined(CONFIG_MACH_MESON8B_ODROIDC)
+#include <linux/timer.h>
+#include <linux/workqueue.h>
+
+struct dwc_power_reset {
+	struct workqueue_struct *workq;
+	struct delayed_work dwork;
+	int otg_pin, hub_pin;
+	dwc_otg_core_if_t *core_if
+};
+
+static struct dwc_power_reset *g_dwc_power_reset;
+
+void dwc_power_reset_worker(struct work_struct *work)
+{
+	struct dwc_power_reset *dwc_reset = container_of(work,
+			struct dwc_power_reset, dwork.work);
+
+	if(dwc_otg_is_host_mode(dwc_reset->core_if)) {
+		if (dwc_reset->otg_pin)
+			amlogic_gpio_direction_output(dwc_reset->otg_pin,
+						0, VBUS_POWER_GPIO_OWNER);
+	}
+	if (dwc_reset->hub_pin)
+		amlogic_gpio_direction_output(dwc_reset->hub_pin,
+					0, VBUS_POWER_GPIO_OWNER);
+	mdelay(500);
+
+	if (dwc_reset->hub_pin)
+		amlogic_gpio_direction_output(dwc_reset->hub_pin,
+					1, VBUS_POWER_GPIO_OWNER);
+	if(dwc_otg_is_host_mode(dwc_reset->core_if)) {
+		if (dwc_reset->otg_pin)
+			amlogic_gpio_direction_output(dwc_reset->otg_pin,
+						1, VBUS_POWER_GPIO_OWNER);
+	}
+
+	mdelay(500);
+
+	DWC_PRINTF("%s : otg_host = %d, otg_pin = %d, hub_pin = %d\n",
+		__func__, dwc_otg_is_host_mode(dwc_reset->core_if),
+		dwc_reset->otg_pin, dwc_reset->hub_pin);
+}
+
+void dwc_power_reset(int delay_ms)
+{
+	if (g_dwc_power_reset) {
+		if (delayed_work_pending(&g_dwc_power_reset->dwork))
+			cancel_delayed_work_sync(&g_dwc_power_reset->dwork);
+		queue_delayed_work(g_dwc_power_reset->workq, &g_dwc_power_reset->dwork,
+				msecs_to_jiffies(delay_ms));
+		DWC_PRINTF("%s\n", __func__);
+	}
+}
+
+EXPORT_SYMBOL(dwc_power_reset);
+
+#endif
+
 void set_usb_vbus_power(int pin,char is_power_on)
 {
     if(is_power_on){
@@ -888,7 +947,9 @@ static int dwc_otg_driver_probe(
 	int dma_config = USB_DMA_BURST_DEFAULT;
 	int gpio_work_mask =1;
 	int gpio_vbus_power_pin = -1;
-	int gpio_hub_reset = -1;
+#if defined(CONFIG_MACH_MESON8B_ODROIDC)
+	int gpio_hub_power_pin = -1;
+#endif
 	int charger_detect = 0;
 	int host_only_core = 0;
 	int pmu_apply_power = 0;
@@ -971,18 +1032,20 @@ static int dwc_otg_driver_probe(
 				if(prop)
 					gpio_work_mask = of_read_ulong(prop,1);	
 			}
-
 #if defined(CONFIG_MACH_MESON8B_ODROIDC)
 			gpio_name = of_get_property(of_node, "gpio-hub-rst", NULL);
 			if(gpio_name)
 			{
-				gpio_hub_reset= amlogic_gpio_name_map_num(gpio_name);
-                amlogic_gpio_request(gpio_hub_reset,VBUS_POWER_GPIO_OWNER);
-                amlogic_gpio_direction_output(gpio_hub_reset,0,VBUS_POWER_GPIO_OWNER);
-				mdelay(20);
-                amlogic_set_value(gpio_hub_reset, 1, VBUS_POWER_GPIO_OWNER);
-				mdelay(20);
-                amlogic_gpio_free(gpio_hub_reset, VBUS_POWER_GPIO_OWNER);
+				gpio_hub_power_pin =
+					amlogic_gpio_name_map_num(gpio_name);
+		                amlogic_gpio_request(gpio_hub_power_pin,
+							VBUS_POWER_GPIO_OWNER);
+
+		                amlogic_gpio_direction_output(gpio_hub_power_pin,
+							0, VBUS_POWER_GPIO_OWNER);
+				mdelay(100);
+				amlogic_gpio_direction_output(gpio_hub_power_pin,
+							1, VBUS_POWER_GPIO_OWNER);
 			}
 #endif
 			prop = of_get_property(of_node, "host-only-core", NULL);
@@ -1344,6 +1407,18 @@ static int dwc_otg_driver_probe(
         dwc_otg_device->usb_early_suspend.param = dwc_otg_device;
         register_early_suspend(&dwc_otg_device->usb_early_suspend);
 #endif
+#if defined(CONFIG_MACH_MESON8B_ODROIDC)
+	if (g_dwc_power_reset) {
+		if (gpio_vbus_power_pin > 0)
+			g_dwc_power_reset->otg_pin =
+					gpio_vbus_power_pin;
+		if (gpio_hub_power_pin > 0)
+			g_dwc_power_reset->hub_pin =
+					gpio_hub_power_pin;
+
+		g_dwc_power_reset->core_if = dwc_otg_device->core_if;
+	}
+#endif
 	return 0;
 
 fail:
@@ -1408,6 +1483,23 @@ static int __init dwc_otg_driver_init(void)
 	int error;
 	printk(KERN_INFO "%s: version %s\n", dwc_driver_name,
 	       DWC_DRIVER_VERSION);
+
+#if defined(CONFIG_MACH_MESON8B_ODROIDC)
+	g_dwc_power_reset =
+		kzalloc(sizeof(struct dwc_power_reset), GFP_KERNEL);
+
+	if (g_dwc_power_reset) {
+		g_dwc_power_reset->workq = alloc_ordered_workqueue("%s",
+					WQ_MEM_RECLAIM | WQ_FREEZABLE,
+					"g_dwc_power_reset-wq");
+
+		INIT_DELAYED_WORK(&g_dwc_power_reset->dwork,
+					dwc_power_reset_worker);
+
+		DWC_PRINTF("%s : g_dwc_power_reset enable\n", __func__);
+	}
+#endif
+
 #ifdef LM_INTERFACE
 	retval = lm_driver_register(&dwc_otg_driver);
 #elif defined(PCI_INTERFACE)
@@ -1448,7 +1540,14 @@ static void __exit dwc_otg_driver_cleanup(void)
 	driver_remove_file(&dwc_otg_driver.driver, &driver_attr_version);
 	pci_unregister_driver(&dwc_otg_driver);
 #endif
-
+#if defined(CONFIG_MACH_MESON8B_ODROIDC)
+	if (g_dwc_power_reset) {
+		if (delayed_work_pending(&g_dwc_power_reset->dwork))
+			cancel_delayed_work_sync(&g_dwc_power_reset->dwork);
+		destroy_workqueue(g_dwc_power_reset->workq);
+		kfree(g_dwc_power_reset);
+	}
+#endif
 	printk(KERN_INFO "%s module removed\n", dwc_driver_name);
 }
 
