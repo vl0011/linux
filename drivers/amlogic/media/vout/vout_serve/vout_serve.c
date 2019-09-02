@@ -395,7 +395,7 @@ static ssize_t vout_mode_show(struct class *class,
 {
 	int ret = 0;
 
-#ifdef CONFIG_ARCH_MESON64_ODROIDN2
+#ifdef CONFIG_ARCH_MESON64_ODROID_COMMON
 	if (strncmp(vout_mode, "custombuilt", 11) == 0)
 		ret = snprintf(buf, VMODE_NAME_LEN_MAX, "%s\n", "panel");
 	else
@@ -460,7 +460,7 @@ static ssize_t vout_axis_show(struct class *class,
 {
 	int ret = 0;
 
-#ifdef CONFIG_ARCH_MESON64_ODROIDN2
+#ifdef CONFIG_ARCH_MESON64_ODROID_COMMON
 	if (strncmp(vout_mode, "custombuilt", 11) == 0)
 		ret = snprintf(buf, 64, "%s\n", "0 0 1920 1080 0 0");
 	else
