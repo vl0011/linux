@@ -1140,6 +1140,10 @@
 #define USB_VENDOR_ID_SHARP	0x04dd
 #define USB_DEVICE_ID_SHARP_TSLV238	0x991c
 
+/* MIDAS HDMI capacitive Screen */
+#define USB_VENDOR_ID_MIDAS	0x0c02
+#define USB_DEVICE_ID_MCT101HDMI_A_RTP	0x04d8
+
 /* SHARP HDMI capacitive Screen */
 #define USB_VENDOR_ID_TEST	0x0
 #define USB_DEVICE_ID_TEST	0x0
