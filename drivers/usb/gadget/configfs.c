@@ -114,6 +114,8 @@ struct gadget_info {
 	struct work_struct work;
 	struct device *dev;
 #endif
+	spinlock_t spinlock;
+	bool unbind;
 };
 
 static inline struct gadget_info *to_gadget_info(struct config_item *item)
@@ -1509,6 +1511,7 @@ static void configfs_composite_unbind(struct usb_gadget *gadget)
 #ifdef CONFIG_AMLOGIC_USB
 	wakeup_source_trash(&Gadget_Lock.wakesrc);
 #endif
+	spin_lock_irqsave(&gi->spinlock, flags);
 	cdev->gadget = NULL;
 	set_gadget_data(gadget, NULL);
 	spin_unlock_irqrestore(&gi->spinlock, flags);
@@ -1686,12 +1689,15 @@ static const struct usb_gadget_driver configfs_driver_template = {
 	.reset          = android_disconnect,
 	.disconnect     = android_disconnect,
 #else
-	.setup          = composite_setup,
-	.reset          = composite_disconnect,
-	.disconnect     = composite_disconnect,
+	.setup          = configfs_composite_setup,
+	.reset          = configfs_composite_disconnect,
+	.disconnect     = configfs_composite_disconnect,
 #endif
 	.suspend	= composite_suspend,
 	.resume		= composite_resume,
+
+	.suspend	= configfs_composite_suspend,
+	.resume		= configfs_composite_resume,
 
 	.max_speed	= USB_SPEED_SUPER,
 	.driver = {
