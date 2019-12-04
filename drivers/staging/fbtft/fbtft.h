@@ -241,9 +241,13 @@ struct fbtft_par {
 	ktime_t update_time;
 	bool bgr;
 	void *extra;
+<<<<<<< HEAD
 #if defined(CONFIG_ARCH_MESON64_ODROID_COMMON)
 	void __iomem *reg_gpiox;
 #endif
+=======
+	bool polarity;
+>>>>>>> e1982b64d2a97d3160b752fa3282e012f68cb01a
 };
 
 #if defined(CONFIG_ARCH_MESON64_ODROID_COMMON)
