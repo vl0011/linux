@@ -3639,6 +3639,7 @@ __setup("stmmaceth=", stmmac_cmdline_opt);
  */
 static int __init stmmac_init(void)
 {
+	int ret;
 #ifdef CONFIG_STMMAC_DEBUG_FS
 	/* Create debugfs main directory if it doesn't exist yet */
 	if (!stmmac_fs_dir) {
@@ -3652,7 +3653,6 @@ static int __init stmmac_init(void)
 		}
 	}
 #endif
-	int ret;
 
 	ret = stmmac_register_platform();
 	if (ret)
