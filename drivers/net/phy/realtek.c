@@ -29,6 +29,9 @@
 #define RTL821x_EPAGSR		0x1f
 
 #define	RTL8211E_INER_LINK_STATUS	0x400
+#define RTL8211F_INER_LINK_STATUS 0x0010
+#define RTL8211F_INSR		0x1d
+#define RTL8211F_PAGE_SELECT	0x1f
 
 MODULE_DESCRIPTION("Realtek PHY driver");
 MODULE_AUTHOR("Johnson Leung");
@@ -38,6 +41,7 @@ static int rtl8211f_config_init(struct phy_device *phydev)
 {
 	int val;
 	int bmcr = 0;
+	u16 reg;
 
 	/* close CLOCK output */
 	val = phy_read(phydev, RTL821x_PHYCR2);
@@ -73,7 +77,32 @@ static int rtl8211f_config_init(struct phy_device *phydev)
 	 * phy_write(phydev, 0x15,val| 1<<21);
 	 */
 
+	/*disable clk_out pin 35 set page 0x0a43 reg25.0 as 0*/
+	phy_write(phydev, RTL8211F_PAGE_SELECT, 0x0a43);
+	reg = phy_read(phydev, 0x19);
+	/*set reg25 bit0 as 0*/
+	reg = phy_write(phydev, 0x19, reg & 0xfffe);
+	/* switch to page 0 */
+	phy_write(phydev, RTL8211F_PAGE_SELECT, 0x0);
+	/*reset phy to apply*/
+	reg = phy_write(phydev, 0x0, 0x9200);
+
+	/* restore to default page 0 */
+	phy_write(phydev, RTL8211F_PAGE_SELECT, 0x0);
+
 	return 0;
+}
+
+static int rtl8211f_ack_interrupt(struct phy_device *phydev)
+{
+	int err;
+
+	phy_write(phydev, RTL8211F_PAGE_SELECT, 0xa43);
+	err = phy_read(phydev, RTL8211F_INSR);
+	/* restore to default page 0 */
+	phy_write(phydev, RTL8211F_PAGE_SELECT, 0x0);
+
+	return (err < 0) ? err : 0;
 }
 
 static int rtl821x_ack_interrupt(struct phy_device *phydev)
@@ -105,6 +134,19 @@ static int rtl8211e_config_intr(struct phy_device *phydev)
 	if (phydev->interrupts == PHY_INTERRUPT_ENABLED)
 		err = phy_write(phydev, RTL821x_INER,
 				RTL8211E_INER_LINK_STATUS);
+	else
+		err = phy_write(phydev, RTL821x_INER, 0);
+
+	return err;
+}
+
+static int rtl8211f_config_intr(struct phy_device *phydev)
+{
+	int err;
+
+	if (phydev->interrupts == PHY_INTERRUPT_ENABLED)
+		err = phy_write(phydev, RTL821x_INER,
+				RTL8211F_INER_LINK_STATUS);
 	else
 		err = phy_write(phydev, RTL821x_INER, 0);
 
@@ -158,12 +200,13 @@ static struct phy_driver rtl8211f_driver = {
 	.phy_id		= 0x001cc916,
 	.name		= "RTL8211F Gigabit Ethernet",
 	.phy_id_mask	= 0x001fffff,
-	.features	= PHY_GBIT_FEATURES | SUPPORTED_Pause |
-			  SUPPORTED_Asym_Pause,
-	.flags		= PHY_HAS_INTERRUPT | PHY_HAS_MAGICANEG,
+	.features	= PHY_GBIT_FEATURES,
+	.flags		= PHY_HAS_INTERRUPT,
 	.config_init	= rtl8211f_config_init,
 	.config_aneg	= &genphy_config_aneg,
 	.read_status	= &genphy_read_status,
+	.ack_interrupt	= &rtl8211f_ack_interrupt,
+	.config_intr	= &rtl8211f_config_intr,
 	.suspend	= genphy_suspend,
 	.resume		= genphy_resume,
 	.driver		= { .owner = THIS_MODULE,},
@@ -198,6 +241,7 @@ module_exit(realtek_exit);
 static struct mdio_device_id __maybe_unused realtek_tbl[] = {
 	{ 0x001cc912, 0x001fffff },
 	{ 0x001cc915, 0x001fffff },
+	{ 0x001cc916, 0x001fffff },
 	{ }
 };
 
