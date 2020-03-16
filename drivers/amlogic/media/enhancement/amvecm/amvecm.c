@@ -6225,14 +6225,34 @@ free_buf:
 	return -EINVAL;
 }
 
+#if defined(CONFIG_ARCH_MESON64_ODROID_COMMON)
+#if !defined(MODULE)
+static int __sdrmode = 2;
+
+static int __init sdrmode_setup(char *str)
+{
+	if (strncmp(str, "sdr", 3) == 0)
+		__sdrmode = 0;	/* sdr -> sdr */
+	else if (strncmp(str, "hdr", 3) == 0)
+		__sdrmode = 1;	/* sdr -> hdr */
+	else
+		__sdrmode = 2;	/* auto */
+
+	return 1;
+}
+__setup("sdrmode=", sdrmode_setup);
+
 static void def_hdr_sdr_mode(void)
 {
-#if defined(CONFIG_ARCH_MESON64_ODROID_COMMON)
-	sdr_mode = 2;
-#else
-	sdr_mode = 0;
-#endif
+	sdr_mode = __sdrmode;
 }
+#endif
+#else
+static void def_hdr_sdr_mode(void)
+{
+	sdr_mode = 0;
+}
+#endif
 
 /* #if (MESON_CPU_TYPE == MESON_CPU_TYPE_MESONG9TV) */
 void init_pq_setting(void)
