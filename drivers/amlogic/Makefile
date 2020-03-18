@@ -18,7 +18,7 @@ endif
 # These 2 marked sentence is just for generate warning messages
 #KBUILD_CFLAGS += -Wno-error=larger-than=28792
 #KBUILD_CFLAGS += -Wno-error=stack-usage=1856
-
+KBUILD_CFLAGS += -Wno-error=stringop-overflow=
 obj-$(CONFIG_CPU_FREQ)		+= cpufreq/
 
 obj-$(CONFIG_AMLOGIC_UART)	+= uart/
