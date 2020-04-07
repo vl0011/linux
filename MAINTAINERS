@@ -14796,14 +14796,6 @@ F:	drivers/amlogic/media/gdc/app/gdc_dmabuf.c
 F:	drivers/amlogic/media/gdc/app/gdc_dmabuf.h
 F:	drivers/amlogic/media/gdc/src/platform/system_log.c
 
-AMLOGIC VIDEOSYNC
-M:	Jintao Xu <jintao.xu@amlogic.com>
-F:	drivers/amlogic/media/video_processor/videosync/Kconfig
-F:	drivers/amlogic/media/video_processor/videosync/Makefile
-F:	drivers/amlogic/media/video_processor/videosync/vfp.h
-F:	drivers/amlogic/media/video_processor/videosync/videosync.h
-F:	drivers/amlogic/media/video_processor/videosync/videosync.c
-
 AMLOGIC G12B_A DTS
 M:	Jianxiong Pan <jianxiong.pan@amlogic.com>
 F:	arch/arm/boot/dts/amlogic/g12b*_a.dts
