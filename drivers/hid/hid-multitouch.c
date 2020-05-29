@@ -1666,6 +1666,12 @@ static const struct hid_device_id mt_devices[] = {
 				USB_VENDOR_ID_MIDAS,
 				USB_DEVICE_ID_MCT101HDMI_A_RTP) },
 
+/* CROSSOVER DISPLAY capacitive Screen */
+	{ .driver_data = MT_CLS_DEFAULT,
+		HID_USB_DEVICE(
+				USB_VENDOR_ID_CROSSOVER,
+				USB_DEVICE_ID_133TF3_DEX) },
+
 /* TEST DISPLAY capacitive Screen */
 	{ .driver_data = MT_CLS_DEFAULT,
 		HID_USB_DEVICE(
