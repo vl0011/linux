@@ -170,6 +170,9 @@
 		};
 	};
 	cooling-maps {
+		cpucore_cooling_map0 {
+			trip = <&phot>;
+		};
 		fan_cooling_map0 {
 			trip = <&fan_0>;
 			cooling-device = <&pwmfan THERMAL_NO_LIMIT 2>;
