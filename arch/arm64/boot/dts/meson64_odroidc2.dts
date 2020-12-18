@@ -380,7 +380,7 @@
                               "MMC_CAP2_BROKEN_VOLTAGE",
                               "MMC_CAP2_BOOTPART_NOACC";
                         f_min = <400000>;
-                        f_max = <200000000>;
+                        f_max = <180000000>;
                         max_req_size = <0x20000>; /**256KB*/
                         gpio_dat3 = <&gpio BOOT_3 GPIO_ACTIVE_HIGH>;
                         hw_reset =  <&gpio BOOT_9 GPIO_ACTIVE_HIGH>;
