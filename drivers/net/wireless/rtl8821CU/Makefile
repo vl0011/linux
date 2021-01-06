@@ -2104,7 +2104,7 @@ EXTRA_CFLAGS += -mhard-float
 else ifeq ($(ARCH), x86_64)
 EXTRA_CFLAGS += -mhard-float
 else ifeq ($(ARCH), arm)
-EXTRA_CFLAGS += -mfloat-abi=hard
+# EXTRA_CFLAGS += -mfloat-abi=hard
 endif
 
 ifeq ($(CONFIG_MULTIDRV), y)
