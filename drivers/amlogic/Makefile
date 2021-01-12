@@ -106,10 +106,10 @@ obj-$(CONFIG_AML_RDMA)		+= rdma/
 
 obj-$(CONFIG_AM_WIFI) += wifi/
 ifneq ($(wildcard $(srctree)/../hardware/wifi),)
-	obj-$(CONFIG_RTL8192CU) += ../../../hardware/wifi/realtek/drivers/8192cu/rtl8xxx_CU/
+	obj-$(CONFIG_RTL8192CU) += ../../../hardware/wifi/realtek/drivers/8192cu/
 endif
 ifneq ($(wildcard $(srctree)/../hardware/wifi),)
-	obj-$(CONFIG_RTL8192CU) += ../../../hardware/wifi/realtek/drivers/8192cu/rtl8xxx_CU/
+	obj-$(CONFIG_RTL8192CU) += ../../../hardware/wifi/realtek/drivers/8192cu/
 endif
 
 obj-$(CONFIG_AM_WIFI) += wifi/
