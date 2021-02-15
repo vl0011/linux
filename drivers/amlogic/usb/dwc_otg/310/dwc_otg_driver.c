@@ -1079,6 +1079,8 @@ static int dwc_otg_driver_probe(struct platform_device *pdev)
 				gpiod_direction_output(hub_gd, 0);
 				mdelay(100);
 				gpiod_direction_output(hub_gd, 1);
+				mdelay(20);
+				gpiod_put(hub_gd);
 			}
 #endif
 			prop = of_get_property(of_node, "host-only-core", NULL);
