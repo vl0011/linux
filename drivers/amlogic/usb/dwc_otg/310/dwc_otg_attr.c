@@ -894,6 +894,34 @@ static ssize_t buspower_store(struct device *_dev,
 DEVICE_ATTR(buspower, 0644, buspower_show, buspower_store);
 
 /**
+ * Set the VBus Power
+ */
+static ssize_t vbus_store(struct device *_dev,
+			      struct device_attribute *attr,
+			      const char *buf, size_t count)
+{
+#ifdef LM_INTERFACE
+	struct lm_device *lm_dev = container_of(_dev, struct lm_device, dev);
+	dwc_otg_device_t *otg_dev = lm_get_drvdata(lm_dev);
+#elif defined(PCI_INTERFACE)
+	dwc_otg_device_t *otg_dev = dev_get_drvdata(_dev);
+#endif
+	uint32_t on = simple_strtoul(buf, NULL, 16);
+
+	if (dwc_otg_is_host_mode(otg_dev->core_if)) {
+		dwc_otg_set_vbus_power(otg_dev->core_if, on);
+		DWC_PRINTF("Set VBus Power : %d \n", on);
+	}
+	else {
+		DWC_PRINTF("Not in host mode. Nothing to do.");
+	}
+
+	return count;
+}
+
+DEVICE_ATTR(vbus, S_IWUSR, 0, vbus_store);
+
+/**
  * @todo Need to do more for suspend?
  */
 /**
@@ -1540,6 +1568,7 @@ void dwc_otg_attr_create(
 	error = device_create_file(&dev->dev, &dev_attr_hnp);
 	error = device_create_file(&dev->dev, &dev_attr_srp);
 	error = device_create_file(&dev->dev, &dev_attr_buspower);
+	error = device_create_file(&dev->dev, &dev_attr_vbus);
 	error = device_create_file(&dev->dev, &dev_attr_bussuspend);
 	error = device_create_file(&dev->dev, &dev_attr_mode_ch_tim_en);
 	error = device_create_file(&dev->dev, &dev_attr_fr_interval);
@@ -1600,6 +1629,7 @@ void dwc_otg_attr_remove(
 	device_remove_file(&dev->dev, &dev_attr_hnp);
 	device_remove_file(&dev->dev, &dev_attr_srp);
 	device_remove_file(&dev->dev, &dev_attr_buspower);
+	device_remove_file(&dev->dev, &dev_attr_vbus);
 	device_remove_file(&dev->dev, &dev_attr_bussuspend);
 	device_remove_file(&dev->dev, &dev_attr_mode_ch_tim_en);
 	device_remove_file(&dev->dev, &dev_attr_fr_interval);
