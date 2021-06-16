@@ -338,7 +338,8 @@ DTC_FLAGS += -Wno-unit_address_vs_reg \
 	-Wno-graph_child_address \
 	-Wno-simple_bus_reg \
 	-Wno-unique_unit_address \
-	-Wno-pci_device_reg
+	-Wno-pci_device_reg \
+	--symbols
 endif
 
 ifneq ($(findstring 2,$(KBUILD_EXTRA_WARN)),)
@@ -392,6 +393,17 @@ endef
 
 $(obj)/%.dt.yaml: $(src)/%.dts $(DTC) $(DT_TMP_SCHEMA) FORCE
 	$(call if_changed_rule,dtc,yaml)
+
+quiet_cmd_dtco = DTCO    $@
+cmd_dtco = mkdir -p $(dir ${dtc-tmp}) ; \
+	$(CPP) $(dtc_cpp_flags) -x assembler-with-cpp -o $(dtc-tmp) $< ; \
+	$(DTC) -@ -H epapr -O dtb -o $@ -b 0 \
+		-i $(dir $<) $(DTC_FLAGS) \
+		-d $(depfile).dtc.tmp $(dtc-tmp) ; \
+	cat $(depfile).pre.tmp $(depfile).dtc.tmp > $(depfile)
+
+$(obj)/%.dtbo: $(obj)/%.dts FORCE
+	$(call if_changed_dep,dtco)
 
 dtc-tmp = $(subst $(comma),_,$(dot-target).dts.tmp)
 
