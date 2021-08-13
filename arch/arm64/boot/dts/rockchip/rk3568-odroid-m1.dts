@@ -1,0 +1,17 @@
+
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2020 Rockchip Electronics Co., Ltd.
+ *
+ */
+
+#include "rk3568-odroid-m1.dtsi"
+#include "rk3568-android.dtsi"
+
+&dsi0 {
+	status = "disabled";
+};
+
+&dsi1 {
+	status = "disabled";
+};
