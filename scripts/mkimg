@@ -224,7 +224,11 @@ fi
 scripts/resource_tool ${DTB_PATH} ${LOGO} ${LOGO_KERNEL} >/dev/null
 
 if [ "${ARCH}" == "arm64" ]; then
-	./scripts/io-domain.sh ${srctree}/arch/arm64/boot/dts/rockchip/.${DTB}
+	if [ -f "${srctree}/arch/arm64/boot/dts/rockchip/.${DTB}.dts.tmp.domain" ]; then
+		echo "${srctree}/arch/arm64/boot/dts/rockchip/.${DTB} exists. skip..."
+	else
+		./scripts/io-domain.sh ${srctree}/arch/arm64/boot/dts/rockchip/.${DTB}
+	fi
 fi
 
 echo "  Image:  resource.img (with ${DTB} ${LOGO} ${LOGO_KERNEL}) is ready"
