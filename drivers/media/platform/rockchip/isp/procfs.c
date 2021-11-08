@@ -155,7 +155,7 @@ static void isp21_show(struct rkisp_device *dev, struct seq_file *p)
 		(val & 1) ? "ON" : "OFF", val,
 		effect[(val & CIF_IMG_EFF_CTRL_MODE_MASK) >> 1]);
 	val = rkisp_read(dev, ISP21_DRC_CTRL0, false);
-	seq_printf(p, "%-10s %s(0x%x)\n", "HDRTMO", (val & 1) ? "ON" : "OFF", val);
+	seq_printf(p, "%-10s %s(0x%x)\n", "HDRDRC", (val & 1) ? "ON" : "OFF", val);
 	val = rkisp_read(dev, ISP_HDRMGE_CTRL, false);
 	seq_printf(p, "%-10s %s(0x%x)\n", "HDRMGE", (val & 1) ? "ON" : "OFF", val);
 	val = rkisp_read(dev, ISP21_BAYNR_CTRL, false);
@@ -257,11 +257,12 @@ static int isp_show(struct seq_file *p, void *v)
 			   dev->rdbk_cnt_x2,
 			   dev->rdbk_cnt_x3);
 	else
-		seq_printf(p, "%-10s frame:%d %s time:%dms\n",
+		seq_printf(p, "%-10s frame:%d %s time:%dms v-blank:%dus\n",
 			   "Isp online",
 			   sdev->dbg.id,
 			   (dev->isp_state & ISP_FRAME_END) ? "idle" : "working",
-			   sdev->dbg.interval / 1000 / 1000);
+			   sdev->dbg.interval / 1000 / 1000,
+			   sdev->dbg.delay / 1000);
 
 	if (dev->br_dev.en)
 		seq_printf(p, "%-10s rkispp%d Format:%s%s Size:%dx%d (frame:%d rate:%dms)\n",

@@ -81,8 +81,6 @@
  * +---------------------------------------------------------+
  */
 
-static int rkisp_rdbk_trigger_event(struct rkisp_device *dev, u32 cmd, void *arg);
-
 struct backup_reg {
 	const u32 base;
 	const u32 shd;
@@ -517,15 +515,16 @@ void rkisp_trigger_read_back(struct rkisp_device *dev, u8 dma2frm, u32 mode, boo
 	}
 
 	if (dev->isp_ver == ISP_V20 && dev->dmarx_dev.trigger == T_MANUAL && !is_try) {
-		if (dev->rd_mode != rd_mode && dev->br_dev.en) {
+		if (dev->rd_mode != rd_mode && RKMODULE_EXTEND_LINE != 0) {
 			tmp = dev->isp_sdev.in_crop.height;
 			val = rkisp_read(dev, CIF_DUAL_CROP_CTRL, false);
 			if (rd_mode == HDR_RDBK_FRAME1) {
-				val |= CIF_DUAL_CROP_MP_MODE_YUV;
+				val |= CIF_DUAL_CROP_MP_MODE_YUV | CIF_DUAL_CROP_SP_MODE_YUV;
 				tmp += RKMODULE_EXTEND_LINE;
 			} else {
-				val &= ~CIF_DUAL_CROP_MP_MODE_YUV;
+				val &= ~(CIF_DUAL_CROP_MP_MODE_YUV | CIF_DUAL_CROP_SP_MODE_YUV);
 			}
+			val |= CIF_DUAL_CROP_CFG_UPD;
 			rkisp_write(dev, CIF_DUAL_CROP_CTRL, val, false);
 			rkisp_write(dev, CIF_ISP_ACQ_V_SIZE, tmp, false);
 			rkisp_write(dev, CIF_ISP_OUT_V_SIZE, tmp, false);
@@ -666,7 +665,7 @@ end:
 		rkisp_trigger_read_back(isp, times, mode, false);
 }
 
-static int rkisp_rdbk_trigger_event(struct rkisp_device *dev, u32 cmd, void *arg)
+int rkisp_rdbk_trigger_event(struct rkisp_device *dev, u32 cmd, void *arg)
 {
 	struct kfifo *fifo = &dev->rdbk_kfifo;
 	struct isp2x_csi_trigger *trigger = NULL;
@@ -1030,6 +1029,67 @@ static void rkisp_monitor_init(struct rkisp_device *dev)
 }
 
 /*
+ * RGB to YUV color space, default BT601
+ * BT601:
+ * Y = 0.299R + 0.587G + 0.114B
+ * CB = -0.1687R - 0.3313G + 0.5B
+ * CR = 0.5R - 0.4187G - 0.0813B
+ * BT709:
+ * Y = 0.2126R + 0.7152G + 0.0722B
+ * CB = -0.1146R - 0.3854G + 0.5B
+ * CR = 0.5R - 0.4542G - 0.0458B
+ * BT2020:
+ * Y = 0.2627R + 0.678G + 0.0593B
+ * CB = -0.1396R - 0.3604G + 0.5B
+ * CR = 0.5R - 0.4598G - 0.0402B
+ * 9 bit coeffs are signed integer values with 7 bit fractional
+ */
+static void rkisp_config_color_space(struct rkisp_device *dev)
+{
+	u16 bt601_coeff[] = {
+		0x0026, 0x004b, 0x000f,
+		0x01ea, 0x01d6, 0x0040,
+		0x0040, 0x01ca, 0x01f6
+	};
+	u16 bt709_coeff[] = {
+		0x001b, 0x005c, 0x0009,
+		0x01f1, 0x01cf, 0x0040,
+		0x0040, 0x01c6, 0x01fa
+	};
+	u16 bt2020_coeff[] = {
+		0x0022, 0x0057, 0x0008,
+		0x01ee, 0x01d2, 0x0040,
+		0x0040, 0x01c5, 0x01fb
+	};
+	u16 i, *coeff;
+
+	switch (dev->isp_sdev.colorspace) {
+	case V4L2_COLORSPACE_REC709:
+		coeff = bt709_coeff;
+		break;
+	case V4L2_COLORSPACE_BT2020:
+		coeff = bt2020_coeff;
+		break;
+	case V4L2_COLORSPACE_SMPTE170M:
+	default:
+		coeff = bt601_coeff;
+		break;
+	}
+
+	for (i = 0; i < 9; i++)
+		rkisp_write(dev, CIF_ISP_CC_COEFF_0 + i * 4, *(coeff + i), false);
+
+	if (dev->isp_sdev.quantization == V4L2_QUANTIZATION_FULL_RANGE)
+		rkisp_set_bits(dev, CIF_ISP_CTRL, 0,
+			       CIF_ISP_CTRL_ISP_CSM_Y_FULL_ENA |
+			       CIF_ISP_CTRL_ISP_CSM_C_FULL_ENA, false);
+	else
+		rkisp_clear_bits(dev, CIF_ISP_CTRL,
+				 CIF_ISP_CTRL_ISP_CSM_Y_FULL_ENA |
+				 CIF_ISP_CTRL_ISP_CSM_C_FULL_ENA, false);
+}
+
+/*
  * configure isp blocks with input format, size......
  */
 static int rkisp_config_isp(struct rkisp_device *dev)
@@ -1168,12 +1228,13 @@ static int rkisp_config_isp(struct rkisp_device *dev)
 		rkisp_write(dev, ISP_ISP3A_IMSC, irq_mask, true);
 	}
 
-	if (out_fmt->fmt_type == FMT_BAYER)
+	if (out_fmt->fmt_type == FMT_BAYER) {
 		rkisp_params_disable_isp(&dev->params_vdev);
-	else
+	} else {
+		rkisp_config_color_space(dev);
 		rkisp_params_first_cfg(&dev->params_vdev, in_fmt,
 				       dev->isp_sdev.quantization);
-
+	}
 	if (!dev->hw_dev->is_single && atomic_read(&dev->hw_dev->refcnt) <= 1) {
 		rkisp_update_regs(dev, CIF_ISP_ACQ_H_OFFS, CIF_ISP_ACQ_V_SIZE);
 		rkisp_update_regs(dev, CIF_ISP_OUT_H_SIZE, CIF_ISP_OUT_V_SIZE);
@@ -1519,8 +1580,6 @@ end:
 	if (dev->hdr.sensor)
 		dev->hdr.sensor = NULL;
 
-	rkisp_params_stream_stop(&dev->params_vdev);
-
 	return 0;
 }
 
@@ -1583,7 +1642,6 @@ static int rkisp_isp_start(struct rkisp_device *dev)
 		dev->hw_dev->monitor.state = ISP_FRAME_END;
 		schedule_work(&dev->hw_dev->monitor.work);
 	}
-	rkisp_rdbk_trigger_event(dev, T_CMD_QUEUE, NULL);
 	return 0;
 }
 
@@ -1903,6 +1961,7 @@ static int rkisp_isp_sd_get_fmt(struct v4l2_subdev *sd,
 		mf->width = isp_sd->out_crop.width;
 		mf->height = isp_sd->out_crop.height;
 		mf->quantization = isp_sd->quantization;
+		mf->colorspace = isp_sd->colorspace;
 	}
 	mf->field = V4L2_FIELD_NONE;
 
@@ -1955,13 +2014,15 @@ static int rkisp_isp_sd_set_fmt(struct v4l2_subdev *sd,
 		mf->width  = isp_sd->out_crop.width;
 		mf->height = isp_sd->out_crop.height;
 		/* full range by default */
-		if (!mf->quantization)
+		if (mf->quantization == V4L2_QUANTIZATION_DEFAULT)
 			mf->quantization = V4L2_QUANTIZATION_FULL_RANGE;
-		/*
-		 * It is quantization for output,
-		 * isp use bt601 limit-range in internal
-		 */
+		/* BT601 default */
+		if (mf->colorspace != V4L2_COLORSPACE_SMPTE170M &&
+		    mf->colorspace != V4L2_COLORSPACE_REC709 &&
+		    mf->colorspace != V4L2_COLORSPACE_BT2020)
+			mf->colorspace = V4L2_COLORSPACE_SMPTE170M;
 		isp_sd->quantization = mf->quantization;
+		isp_sd->colorspace = mf->colorspace;
 	}
 
 	mf->field = V4L2_FIELD_NONE;
@@ -2149,30 +2210,30 @@ static void rkisp_isp_read_add_fifo_data(struct rkisp_device *dev)
 static int rkisp_isp_sd_s_stream(struct v4l2_subdev *sd, int on)
 {
 	struct rkisp_device *isp_dev = sd_to_isp_dev(sd);
-	int ret = 0;
 
 	if (!on) {
 		rkisp_stop_3a_run(isp_dev);
-		atomic_dec(&isp_dev->hw_dev->refcnt);
 		wait_event_timeout(isp_dev->sync_onoff,
 			isp_dev->irq_ends_mask == (ISP_FRAME_END | ISP_FRAME_IN) &&
 			(!IS_HDR_RDBK(isp_dev->rd_mode) ||
 			 isp_dev->isp_state & ISP_STOP), msecs_to_jiffies(5));
-		return rkisp_isp_stop(isp_dev);
+		mutex_lock(&isp_dev->hw_dev->dev_lock);
+		rkisp_isp_stop(isp_dev);
+		atomic_dec(&isp_dev->hw_dev->refcnt);
+		mutex_unlock(&isp_dev->hw_dev->dev_lock);
+		rkisp_params_stream_stop(&isp_dev->params_vdev);
+		return 0;
 	}
 
 	rkisp_start_3a_run(isp_dev);
+	mutex_lock(&isp_dev->hw_dev->dev_lock);
 	atomic_inc(&isp_dev->hw_dev->refcnt);
 	atomic_set(&isp_dev->isp_sdev.frm_sync_seq, 0);
-	ret = rkisp_config_cif(isp_dev);
-	if (ret < 0)
-		goto out;
-
-	ret = rkisp_isp_start(isp_dev);
-out:
-	if (ret < 0)
-		atomic_dec(&isp_dev->hw_dev->refcnt);
-	return ret;
+	rkisp_config_cif(isp_dev);
+	rkisp_isp_start(isp_dev);
+	mutex_unlock(&isp_dev->hw_dev->dev_lock);
+	rkisp_rdbk_trigger_event(isp_dev, T_CMD_QUEUE, NULL);
+	return 0;
 }
 
 static int rkisp_isp_sd_s_power(struct v4l2_subdev *sd, int on)
@@ -2488,45 +2549,44 @@ static long rkisp_compat_ioctl32(struct v4l2_subdev *sd,
 
 	switch (cmd) {
 	case RKISP_CMD_TRIGGER_READ_BACK:
-		ret = copy_from_user(&trigger, up, sizeof(trigger));
-		if (!ret)
-			ret = rkisp_ioctl(sd, cmd, &trigger);
+		if (copy_from_user(&trigger, up, sizeof(trigger)))
+			return -EFAULT;
+		ret = rkisp_ioctl(sd, cmd, &trigger);
 		break;
 	case RKISP_CMD_CSI_MEMORY_MODE:
-		ret = copy_from_user(&mode, up, sizeof(int));
-		if (!ret)
-			ret = rkisp_ioctl(sd, cmd, &mode);
+		if (copy_from_user(&mode, up, sizeof(int)))
+			return -EFAULT;
+		ret = rkisp_ioctl(sd, cmd, &mode);
 		break;
 	case RKISP_CMD_GET_SHARED_BUF:
 		ret = rkisp_ioctl(sd, cmd, &resmem);
-		if (!ret)
-			ret = copy_to_user(up, &resmem, sizeof(resmem));
+		if (!ret && copy_to_user(up, &resmem, sizeof(resmem)))
+			ret = -EFAULT;
 		break;
 	case RKISP_CMD_FREE_SHARED_BUF:
 		ret = rkisp_ioctl(sd, cmd, NULL);
 		break;
 	case RKISP_CMD_GET_LDCHBUF_INFO:
 		ret = rkisp_ioctl(sd, cmd, &ldchbuf);
-		if (!ret)
-			ret = copy_to_user(up, &ldchbuf, sizeof(ldchbuf));
+		if (!ret && copy_to_user(up, &ldchbuf, sizeof(ldchbuf)))
+			ret = -EFAULT;
 		break;
 	case RKISP_CMD_SET_LDCHBUF_SIZE:
-		ret = copy_from_user(&ldchsize, up, sizeof(ldchsize));
-		if (!ret)
-			ret = rkisp_ioctl(sd, cmd, &ldchsize);
+		if (copy_from_user(&ldchsize, up, sizeof(ldchsize)))
+			return -EFAULT;
+		ret = rkisp_ioctl(sd, cmd, &ldchsize);
 		break;
 	case RKISP_CMD_GET_SHM_BUFFD:
-		ret = copy_from_user(&shmem, up, sizeof(shmem));
-		if (!ret) {
-			ret = rkisp_ioctl(sd, cmd, &shmem);
-			if (!ret)
-				ret = copy_to_user(up, &shmem, sizeof(shmem));
-		}
+		if (copy_from_user(&shmem, up, sizeof(shmem)))
+			return -EFAULT;
+		ret = rkisp_ioctl(sd, cmd, &shmem);
+		if (!ret && copy_to_user(up, &shmem, sizeof(shmem)))
+			ret = -EFAULT;
 		break;
 	case RKISP_CMD_GET_FBCBUF_FD:
 		ret = rkisp_ioctl(sd, cmd, &idxfd);
-		if (!ret)
-			ret = copy_to_user(up, &idxfd, sizeof(idxfd));
+		if (!ret && copy_to_user(up, &idxfd, sizeof(idxfd)))
+			ret = -EFAULT;
 		break;
 	default:
 		ret = -ENOIOCTLCMD;
@@ -2593,6 +2653,8 @@ static void rkisp_isp_sd_init_default_fmt(struct rkisp_isp_subdev *isp_sd)
 	/* propagate to source */
 	*out_crop = *in_crop;
 	*out_fmt = rkisp_isp_output_formats[0];
+	isp_sd->quantization = V4L2_QUANTIZATION_FULL_RANGE;
+	isp_sd->colorspace = V4L2_COLORSPACE_SMPTE170M;
 }
 
 int rkisp_register_isp_subdev(struct rkisp_device *isp_dev,
@@ -2847,6 +2909,7 @@ void rkisp_isp_isr(unsigned int isp_mis,
 		ISP2X_3A_RAWHIST_CH1 | ISP2X_3A_RAWHIST_CH2 |
 		ISP2X_3A_RAWAF_SUM | ISP2X_3A_RAWAF_LUM |
 		ISP2X_3A_RAWAF | ISP2X_3A_RAWAWB;
+	bool sof_event_later = false;
 
 	/*
 	 * The last time that rx perform 'back read' don't clear done flag
@@ -2860,8 +2923,14 @@ void rkisp_isp_isr(unsigned int isp_mis,
 	dev->isp_isr_cnt++;
 	/* start edge of v_sync */
 	if (isp_mis & CIF_ISP_V_START) {
-		if (dev->isp_state & ISP_FRAME_END)
+		if (dev->isp_state & ISP_FRAME_END) {
+			u64 tmp = dev->isp_sdev.dbg.interval +
+					dev->isp_sdev.dbg.timestamp;
+
 			dev->isp_sdev.dbg.timestamp = ktime_get_ns();
+			/* v-blank: frame_end - frame_start */
+			dev->isp_sdev.dbg.delay = dev->isp_sdev.dbg.timestamp - tmp;
+		}
 		rkisp_set_state(&dev->isp_state, ISP_FRAME_VS);
 		if (dev->hw_dev->monitor.is_en) {
 			rkisp_set_state(&dev->hw_dev->monitor.state, ISP_FRAME_VS);
@@ -2901,7 +2970,9 @@ void rkisp_isp_isr(unsigned int isp_mis,
 			}
 		}
 
-		if (dev->vs_irq < 0) {
+		if (isp_mis & CIF_ISP_FRAME)
+			sof_event_later = true;
+		if (dev->vs_irq < 0 && !sof_event_later) {
 			dev->isp_sdev.frm_timestamp = ktime_get_ns();
 			rkisp_isp_queue_event_sof(&dev->isp_sdev);
 		}
@@ -3006,6 +3077,12 @@ vs_skip:
 	 * Do the updates in the order of the processing flow.
 	 */
 	rkisp_params_isr(&dev->params_vdev, isp_mis);
+
+	/* cur frame end and next frame start irq togeter */
+	if (dev->vs_irq < 0 && sof_event_later) {
+		dev->isp_sdev.frm_timestamp = ktime_get_ns();
+		rkisp_isp_queue_event_sof(&dev->isp_sdev);
+	}
 
 	if (isp_mis & CIF_ISP_FRAME_IN)
 		rkisp_check_idle(dev, ISP_FRAME_IN);
