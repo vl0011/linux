@@ -6,3 +6,10 @@
 
 #include "rk3568-odroid-m1.dtsi"
 #include "rk3568-android.dtsi"
+
+/ {
+	aliases {
+		mmc0 = &sdhci;
+		mmc1 = &sdmmc0;
+	};
+};
