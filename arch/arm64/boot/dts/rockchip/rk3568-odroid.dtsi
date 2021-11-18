@@ -812,6 +812,9 @@
 
 &sfc {
 	status = "okay";
+
+	pinctrl-names = "default";
+	pinctrl-0 = <&fspi_pins &fspi_cs1>;
 };
 
 &spdif_8ch {
