@@ -82,6 +82,22 @@
 	};
 };
 
+/*
+ * mipi_dphy0 needs to be enabled
+ * when dsi0 is enabled
+ */
+&dsi0 {
+	status = "disabled";
+};
+
+&dsi0_in_vp0 {
+	status = "disabled";
+};
+
+&dsi0_in_vp1 {
+	status = "disabled";
+};
+
 &gmac0 {
 	phy-mode = "rgmii";
 	clock_in_out = "output";
@@ -108,14 +124,6 @@
 	phy-handle = <&rgmii_phy0>;
 
 	status = "okay";
-};
-
-/*
- * power-supply should switche to vcc3v3_lcd1_n
- * when mipi panel is connected to dsi1.
- */
-&gt1x {
-	power-supply = <&vcc3v3_lcd0_n>;
 };
 
 &i2c2 {
@@ -149,10 +157,6 @@
 			};
 		};
 	};
-};
-
-&i2c5 {
-	status = "disabled";
 };
 
 &mdio0 {
@@ -218,11 +222,6 @@
 &route_dsi0 {
 	status = "okay";
 	connect = <&vp1_out_dsi0>;
-};
-
-&vcc3v3_lcd0_n {
-	gpio = <&gpio0 RK_PC7 GPIO_ACTIVE_HIGH>;
-	enable-active-high;
 };
 
 &bus_npu {
