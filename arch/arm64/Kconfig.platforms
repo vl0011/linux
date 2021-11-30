@@ -163,6 +163,17 @@ config ARCH_ROCKCHIP
 	  This enables support for the ARMv8 based Rockchip chipsets,
 	  like the RK3368.
 
+config ARCH_ROCKCHIP_ODROID_COMMON
+	bool
+
+config ARCH_ROCKCHIP_ODROIDM1
+	bool "Hardkernel's ODROID-M1 Single Board Computer"
+	depends on ARCH_ROCKCHIP
+	select ARCH_ROCKCHIP_ODROID_COMMON
+	help
+	  This enables support for the board ODROID-M1 of Hardkernel
+	  which is based on ARMv8 SoC of Rockchip, Inc.
+
 config ARCH_SEATTLE
 	bool "AMD Seattle SoC Family"
 	help
