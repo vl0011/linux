@@ -574,10 +574,6 @@
 	};
 };
 
-&i2c1 {
-	status = "okay";
-};
-
 &i2s0_8ch {
 	status = "okay";
 };
@@ -728,10 +724,6 @@
 			<0x7e	KEY_VOLUMEDOWN>,
 			<0x7f	KEY_VOLUMEUP>;
 	};
-};
-
-&pwm4 {
-	status = "okay";
 };
 
 &rk_rga {
