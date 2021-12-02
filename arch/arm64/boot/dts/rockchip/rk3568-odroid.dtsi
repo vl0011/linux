@@ -574,6 +574,12 @@
 	};
 };
 
+&i2c2 {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c2m1_xfer>;
+};
+
 &i2s0_8ch {
 	status = "okay";
 };

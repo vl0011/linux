@@ -14,5 +14,8 @@ dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
 					pwm10.dtbo \
 					pwm11-ir.dtbo
 
+dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
+					ov5647.dtbo
+
 targets += $(dtbo-y)
 always := $(dtbo-y)
