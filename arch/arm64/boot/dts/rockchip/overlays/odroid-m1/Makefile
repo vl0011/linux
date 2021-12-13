@@ -16,7 +16,8 @@ dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
 					display-vu8m.dtbo
 
 dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
-					ov5647.dtbo
+					ov5647.dtbo \
+					imx219.dtbo
 
 targets += $(dtbo-y)
 always := $(dtbo-y)
