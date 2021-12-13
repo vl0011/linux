@@ -138,22 +138,6 @@
 		"", "", "", "", "", "", "", "";
 };
 
-/*
- * mipi_dphy0 needs to be enabled
- * when dsi0 is enabled
- */
-&dsi0 {
-	status = "disabled";
-};
-
-&dsi0_in_vp0 {
-	status = "disabled";
-};
-
-&dsi0_in_vp1 {
-	status = "disabled";
-};
-
 &gmac0 {
 	phy-mode = "rgmii";
 	clock_in_out = "output";
@@ -216,7 +200,7 @@
 };
 
 &route_dsi0 {
-	status = "okay";
+	status = "disabled";
 	connect = <&vp1_out_dsi0>;
 };
 
