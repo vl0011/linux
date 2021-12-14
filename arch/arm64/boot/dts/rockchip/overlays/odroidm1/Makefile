@@ -9,10 +9,9 @@ dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
 					uart1.dtbo \
 					pwm1-0.dtbo \
 					pwm1-1.dtbo \
-					pwm2.dtbo \
+					pwm2-0.dtbo \
+					pwm2-1.dtbo \
 					pwm9.dtbo \
-					pwm10.dtbo \
-					pwm11-ir.dtbo \
 					display-vu8m.dtbo
 
 dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
