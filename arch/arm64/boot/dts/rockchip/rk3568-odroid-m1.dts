@@ -17,3 +17,7 @@
 		i2c3 = &i2c0;
 	};
 };
+
+&chosen {
+	disable-vop2-fixup;
+};
