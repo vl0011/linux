@@ -20,6 +20,7 @@
  */
 
 #include <linux/clk.h>
+#include <linux/compat.h>
 #include <linux/delay.h>
 #include <linux/i2c.h>
 #include <linux/init.h>
@@ -30,6 +31,7 @@
 #include <linux/videodev2.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
+#include <media/v4l2-event.h>
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-image-sizes.h>
 #include <media/v4l2-mediabus.h>
@@ -42,32 +44,36 @@
 
 #define REG_NULL 0xffff
 
+#define MIPI_CTRL00_CLOCK_LANE_GATE	BIT(5)
+#define MIPI_CTRL00_LINE_SYNC_ENABLE	BIT(4)
 #define MIPI_CTRL00_BUS_IDLE	BIT(2)
+#define MIPI_CTRL00_CLOCK_LANE_DISABLE	BIT(0)
 
-// Chip control
-#define OV5647_SW_STANDBY	0x100
+#define OV5647_SW_STANDBY	0x0100
 #define OV5647_SW_RESET	0x0103
-
-// System Control
 #define OV5647_REG_CHIPID_H	0x300A
 #define OV5647_REG_CHIPID_L	0x300B
 #define OV5647_REG_PAD_OUT2	0x300D
-
-// AEC/AGC1
-// Exposure
-#define OV5647_REG_LINE_H	0x3500
-#define OV5647_REG_LINE_M	0x3501
-#define OV5647_REG_LINE_L	0x3502
-// AGC
+#define OV5647_REG_EXP_H	0x3500
+#define OV5647_REG_EXP_M	0x3501
+#define OV5647_REG_EXP_L	0x3502
+#define OV5647_REG_AEC_AGC	0x3503
 #define OV5647_REG_GAIN_H	0x350A
 #define OV5647_REG_GAIN_L	0x350B
-
-// Frame Control
+#define OV5647_REG_VFLIP	0x3820
+#define OV5647_REG_HFLIP	0x3821
 #define OV5647_REG_FRAME_OFF_NUMBER	0x4202
-
-// MIPI Top
 #define OV5647_REG_MIPI_CTRL00	0x4800
 #define OV5647_REG_MIPI_CTRL14	0x4814
+#define OV5647_REG_AWB	0x5001
+
+/* Test Pattern Control */
+#define OV5647_REG_TEST_PATTERN	0x503D
+#define OV5647_TEST_PATTERN_DISABLE	0x00
+#define OV5647_TEST_PATTERN_COLOR_BARS	0x80
+#define OV5647_TEST_PATTERN_RANDOM_DATA	0x81
+#define OV5647_TEST_PATTERN_COLOR_SQUARES	0x82
+#define OV5647_TEST_PATTERN_INPUT_DATA	0x83
 
 #define OV5647_EXPOSURE_MIN	0x000000
 #define OV5647_EXPOSURE_MAX	0x0fffff
@@ -79,9 +85,9 @@
 #define OV5647_ANALOG_GAIN_STEP	0x01
 #define OV5647_ANALOG_GAIN_DEFAULT 0x100
 
-#define OV5647_LINK_FREQ_150MHZ		150000000
+#define OV5647_DEFAULT_LINK_FREQ	150000000
 static const s64 link_freq_menu_items[] = {
-	OV5647_LINK_FREQ_150MHZ
+	OV5647_DEFAULT_LINK_FREQ
 };
 
 struct regval_list {
@@ -97,9 +103,11 @@ struct ov5647_state {
 	unsigned int width;
 	unsigned int height;
 	int power_count;
+	int test_pattern;
 	struct clk *xvclk;
 	struct gpio_desc *pwdn_gpio;
 
+	unsigned int flags;
 	struct v4l2_ctrl_handler ctrl_handler;
 	struct v4l2_ctrl *link_freq;
 	struct v4l2_ctrl *hblank;
@@ -107,6 +115,8 @@ struct ov5647_state {
 	struct v4l2_ctrl *pixel_rate;
 	struct v4l2_ctrl *exposure;
 	struct v4l2_ctrl *anal_gain;
+	struct v4l2_ctrl *hflip;
+	struct v4l2_ctrl *vflip;
 
 	const struct ov5647_mode *cur_mode;
 	u32 module_index;
@@ -128,6 +138,22 @@ static inline struct ov5647_state *to_state(struct v4l2_subdev *sd)
 {
 	return container_of(sd, struct ov5647_state, sd);
 }
+
+static const char * const ov5647_test_pattern_menu[] = {
+	"Disabled",
+	"Color Bars",
+	"Random Data",
+	"Color Squares",
+	"Input Data"
+};
+
+static u8 ov5647_test_pattern_val[] = {
+	OV5647_TEST_PATTERN_DISABLE,
+	OV5647_TEST_PATTERN_COLOR_BARS,
+	OV5647_TEST_PATTERN_RANDOM_DATA,
+	OV5647_TEST_PATTERN_COLOR_SQUARES,
+	OV5647_TEST_PATTERN_INPUT_DATA,
+};
 
 static struct regval_list sensor_oe_disable_regs[] = {
 	{0x3000, 0x00},
@@ -198,19 +224,19 @@ static struct regval_list ov5647_common_regs[] = {
 	{0x5189, 0x00},
 	{0x518a, 0x04},
 	{0x518b, 0x00},
-	{0x5000, 0x00},		/* lenc WBC on */
 	{0x3011, 0x62},
 	/* mipi */
 	{0x3016, 0x08},
 	{0x3017, 0xe0},
 	{0x3018, 0x44},
-	{0x3034, 0x08},
+	{0x3034, 0x1a},
 	{0x3106, 0xf5},
 	{REG_NULL, 0x00}
 };
 
 static struct regval_list ov5647_1296x972[] = {
 	{0x0100, 0x00},
+	{0x3034, 0x1a},
 	{0x3035, 0x21},		/* PLL */
 	{0x3036, 0x60},		/* PLL */
 	{0x303c, 0x11},		/* PLL */
@@ -278,6 +304,8 @@ static struct regval_list ov5647_2592x1944[] = {
 	{0x3805, 0x33},
 	{0x3806, 0x07},
 	{0x3807, 0xa3},
+	{0x3821, 0x00},
+	{0x3820, 0x00},
 	{0x3a08, 0x01},
 	{0x3a09, 0x28},
 	{0x3a0a, 0x00},
@@ -378,9 +406,20 @@ static int ov5647_set_virtual_channel(struct v4l2_subdev *sd, int channel)
 
 static int ov5647_stream_on(struct v4l2_subdev *sd)
 {
+	struct ov5647_state *ov5647 = to_state(sd);
+	u8 val = MIPI_CTRL00_BUS_IDLE;
 	int ret;
 
-	ret = ov5647_write(sd, OV5647_REG_MIPI_CTRL00, MIPI_CTRL00_BUS_IDLE);
+	/* Apply customized values from user */
+	ret = __v4l2_ctrl_handler_setup(sd->ctrl_handler);
+	if (ret)
+		return ret;
+
+	if (ov5647->flags & V4L2_MBUS_CSI2_NONCONTINUOUS_CLOCK)
+		val |= MIPI_CTRL00_CLOCK_LANE_GATE |
+			MIPI_CTRL00_LINE_SYNC_ENABLE;
+
+	ret = ov5647_write(sd, OV5647_REG_MIPI_CTRL00, val);
 	if (ret < 0)
 		return ret;
 
@@ -395,7 +434,10 @@ static int ov5647_stream_off(struct v4l2_subdev *sd)
 {
 	int ret;
 
-	ret = ov5647_write(sd, OV5647_REG_MIPI_CTRL00, 0x25);
+	ret = ov5647_write(sd, OV5647_REG_MIPI_CTRL00,
+			MIPI_CTRL00_CLOCK_LANE_GATE |
+			MIPI_CTRL00_BUS_IDLE |
+			MIPI_CTRL00_CLOCK_LANE_DISABLE);
 	if (ret < 0)
 		return ret;
 
@@ -423,19 +465,51 @@ static int set_sw_standby(struct v4l2_subdev *sd, bool standby)
 	return ov5647_write(sd, OV5647_SW_STANDBY, rdval);
 }
 
+static int ov5647_set_autogain(struct v4l2_subdev *sd, u32 val)
+{
+	int ret;
+	u8 reg;
+
+	ret = ov5647_read(sd, OV5647_REG_AEC_AGC, &reg);
+	if (ret)
+		return ret;
+
+	return ov5647_write(sd, OV5647_REG_AEC_AGC, val ? reg & ~BIT(1)
+							: reg | BIT(1));
+}
+
+static int ov5647_set_auto_white_balance(struct v4l2_subdev *sd, u32 val)
+{
+	return ov5647_write(sd, OV5647_REG_AWB, val ? 1 : 0);
+}
+
 static int ov5647_set_exposure(struct v4l2_subdev *sd, s32 val)
 {
 	int ret;
 
-	ret = ov5647_write(sd, OV5647_REG_LINE_L, val & 0x00FF);
+	ret = ov5647_write(sd, OV5647_REG_EXP_L, val & 0x00FF);
 	if (ret < 0)
 		return ret;
 
-	ret = ov5647_write(sd, OV5647_REG_LINE_M, (val & 0xFF00) >> 8);
+	ret = ov5647_write(sd, OV5647_REG_EXP_M, (val & 0xFF00) >> 8);
 	if (ret < 0)
 		return ret;
 
-	return ov5647_write(sd, OV5647_REG_LINE_H, val >> 16);
+	return ov5647_write(sd, OV5647_REG_EXP_H, val >> 16);
+}
+
+static int ov5647_set_exposure_auto(struct v4l2_subdev *sd, u32 val)
+{
+	int ret;
+	u8 reg;
+
+	ret = ov5647_read(sd, OV5647_REG_AEC_AGC, &reg);
+	if (ret)
+		return ret;
+
+	return ov5647_write(sd, OV5647_REG_AEC_AGC,
+			    val == V4L2_EXPOSURE_MANUAL ? reg | BIT(0)
+							: reg & ~BIT(0));
 }
 
 static int ov5647_set_analog_gain(struct v4l2_subdev *sd, s32 val)
@@ -447,6 +521,24 @@ static int ov5647_set_analog_gain(struct v4l2_subdev *sd, s32 val)
 		return ret;
 
 	return ov5647_write(sd, OV5647_REG_GAIN_H, val >> 8);
+}
+
+static int ov5647_set_flip(struct v4l2_subdev *sd, u16 reg, u32 ctrl_val)
+{
+	int ret;
+	u8 reg_val;
+
+	ret = ov5647_read(sd, reg, &reg_val);
+	if (0 < ret) {
+		if (ctrl_val)
+			reg_val |= 2;
+		else
+			reg_val &= ~2;
+
+		ret = ov5647_write(sd, reg, reg_val);
+	}
+
+	return ret;
 }
 
 static int __sensor_init(struct v4l2_subdev *sd)
@@ -681,6 +773,8 @@ static const struct v4l2_subdev_core_ops ov5647_subdev_core_ops = {
 	.g_register = ov5647_sensor_get_register,
 	.s_register = ov5647_sensor_set_register,
 #endif
+	.subscribe_event = v4l2_ctrl_subdev_subscribe_event,
+	.unsubscribe_event = v4l2_event_subdev_unsubscribe,
 };
 
 static int ov5647_s_stream(struct v4l2_subdev *sd, int enable)
@@ -705,7 +799,7 @@ static int ov5647_g_frame_interval(struct v4l2_subdev *sd,
 }
 
 #define OV5647_LANES	2
-static int ov5647_g_mbus_config(struct v4l2_subdev *sd,
+static int ov5647_g_mbus_config(struct v4l2_subdev *sd, unsigned int pad,
 				struct v4l2_mbus_config *config)
 {
 	u32 val = 0;
@@ -713,7 +807,7 @@ static int ov5647_g_mbus_config(struct v4l2_subdev *sd,
 	val = 1 << (OV5647_LANES - 1) |
 		V4L2_MBUS_CSI2_CHANNEL_0 |
 		V4L2_MBUS_CSI2_CONTINUOUS_CLOCK;
-	config->type = V4L2_MBUS_CSI2;
+	config->type = V4L2_MBUS_CSI2_DPHY;
 	config->flags = val;
 
 	return 0;
@@ -722,8 +816,22 @@ static int ov5647_g_mbus_config(struct v4l2_subdev *sd,
 static const struct v4l2_subdev_video_ops ov5647_subdev_video_ops = {
 	.s_stream = ov5647_s_stream,
 	.g_frame_interval = ov5647_g_frame_interval,
-	.g_mbus_config = ov5647_g_mbus_config,
 };
+
+static u32 ov5647_get_mbus_code(struct v4l2_subdev *sd)
+{
+	struct ov5647_state *ov5647 = to_state(sd);
+	int index = ov5647->hflip->val | (ov5647->vflip->val << 1);
+
+	static const u32 codes[4] = {
+		MEDIA_BUS_FMT_SBGGR10_1X10,
+		MEDIA_BUS_FMT_SGBRG10_1X10,
+		MEDIA_BUS_FMT_SGRBG10_1X10,
+		MEDIA_BUS_FMT_SRGGB10_1X10,
+	};
+
+	return codes[index];
+}
 
 static int ov5647_enum_mbus_code(struct v4l2_subdev *sd,
 				 struct v4l2_subdev_pad_config *cfg,
@@ -732,7 +840,7 @@ static int ov5647_enum_mbus_code(struct v4l2_subdev *sd,
 	if (code->index > 0)
 		return -EINVAL;
 
-	code->code = MEDIA_BUS_FMT_SBGGR8_1X8;
+	code->code = ov5647_get_mbus_code(sd);
 
 	return 0;
 }
@@ -744,7 +852,7 @@ static int ov5647_enum_frame_size(struct v4l2_subdev *sd,
 	if (fse->index >= ARRAY_SIZE(supported_modes))
 		return -EINVAL;
 
-	if (fse->code != MEDIA_BUS_FMT_SBGGR8_1X8)
+	if (fse->code != ov5647_get_mbus_code(sd))
 		return -EINVAL;
 
 	fse->min_width  = supported_modes[fse->index].width;
@@ -762,7 +870,7 @@ static int ov5647_enum_frame_interval(struct v4l2_subdev *sd,
 	if (fie->index >= ARRAY_SIZE(supported_modes))
 		return -EINVAL;
 
-	if (fie->code != MEDIA_BUS_FMT_SBGGR8_1X8)
+	if (fie->code != ov5647_get_mbus_code(sd))
 		return -EINVAL;
 
 	fie->width = supported_modes[fie->index].width;
@@ -809,7 +917,7 @@ static int ov5647_set_fmt(struct v4l2_subdev *sd,
 	mutex_lock(&ov5647->lock);
 
 	mode = ov5647_find_best_fit(fmt);
-	fmt->format.code = MEDIA_BUS_FMT_SBGGR8_1X8;
+	fmt->format.code = ov5647_get_mbus_code(sd);
 	fmt->format.width = mode->width;
 	fmt->format.height = mode->height;
 	fmt->format.field = V4L2_FIELD_NONE;
@@ -848,7 +956,7 @@ static int ov5647_get_fmt(struct v4l2_subdev *sd,
 	} else {
 		fmt->format.width = mode->width;
 		fmt->format.height = mode->height;
-		fmt->format.code = MEDIA_BUS_FMT_SBGGR8_1X8;
+		fmt->format.code = ov5647_get_mbus_code(sd);
 		fmt->format.field = V4L2_FIELD_NONE;
 	}
 
@@ -863,6 +971,7 @@ static const struct v4l2_subdev_pad_ops ov5647_subdev_pad_ops = {
 	.enum_frame_interval = ov5647_enum_frame_interval,
 	.get_fmt = ov5647_get_fmt,
 	.set_fmt = ov5647_set_fmt,
+	.get_mbus_config = ov5647_g_mbus_config,
 };
 
 static const struct v4l2_subdev_ops ov5647_subdev_ops = {
@@ -877,11 +986,30 @@ static int ov5647_set_ctrl(struct v4l2_ctrl *ctrl)
 	    container_of(ctrl->handler, struct ov5647_state, ctrl_handler);
 
 	switch (ctrl->id) {
+	case V4L2_CID_AUTOGAIN:
+		ov5647_set_autogain(&ov5647->sd, ctrl->val);
+		break;
+	case V4L2_CID_AUTO_WHITE_BALANCE:
+		ov5647_set_auto_white_balance(&ov5647->sd, ctrl->val);
+		break;
 	case V4L2_CID_EXPOSURE:
 		ov5647_set_exposure(&ov5647->sd, ctrl->val * 16);
 		break;
+	case V4L2_CID_EXPOSURE_AUTO:
+		ov5647_set_exposure_auto(&ov5647->sd, ctrl->val);
+		break;
 	case V4L2_CID_ANALOGUE_GAIN:
 		ov5647_set_analog_gain(&ov5647->sd, ctrl->val);
+		break;
+	case V4L2_CID_HFLIP:
+		ov5647_set_flip(&ov5647->sd, OV5647_REG_HFLIP, ctrl->val);
+		break;
+	case V4L2_CID_VFLIP:
+		ov5647_set_flip(&ov5647->sd, OV5647_REG_VFLIP, ctrl->val);
+		break;
+	case V4L2_CID_TEST_PATTERN:
+		ov5647_write(&ov5647->sd, OV5647_REG_TEST_PATTERN,
+				ov5647_test_pattern_val[ctrl->val]);
 		break;
 	default:
 		break;
@@ -903,7 +1031,7 @@ static int ov5647_initialize_controls(struct v4l2_subdev *sd)
 	int ret;
 
 	handler = &ov5647->ctrl_handler;
-	ret = v4l2_ctrl_handler_init(handler, 1);
+	ret = v4l2_ctrl_handler_init(handler, 9);
 	if (ret)
 		return ret;
 
@@ -919,6 +1047,11 @@ static int ov5647_initialize_controls(struct v4l2_subdev *sd)
 	    v4l2_ctrl_new_std(handler, NULL, V4L2_CID_PIXEL_RATE, 0, pixel_rate,
 			      1, pixel_rate);
 
+	v4l2_ctrl_new_std_menu_items(handler, &ov5647_ctrl_ops,
+					   V4L2_CID_TEST_PATTERN,
+					   ARRAY_SIZE(ov5647_test_pattern_menu) - 1,
+					   0, 0, ov5647_test_pattern_menu);
+
 	/* blank */
 	h_blank = mode->hts_def - mode->width;
 	ov5647->hblank = v4l2_ctrl_new_std(handler, NULL, V4L2_CID_HBLANK,
@@ -927,6 +1060,15 @@ static int ov5647_initialize_controls(struct v4l2_subdev *sd)
 	ov5647->vblank = v4l2_ctrl_new_std(handler, NULL, V4L2_CID_VBLANK,
 					   v_blank, v_blank, 1, v_blank);
 
+	v4l2_ctrl_new_std(handler, &ov5647_ctrl_ops,
+					     V4L2_CID_AUTOGAIN, 0, 1, 1, 0);
+
+	v4l2_ctrl_new_std(handler, &ov5647_ctrl_ops,
+					     V4L2_CID_AUTO_WHITE_BALANCE, 0, 1, 1, 0);
+
+	v4l2_ctrl_new_std_menu(handler, &ov5647_ctrl_ops,
+					     V4L2_CID_EXPOSURE_AUTO, V4L2_EXPOSURE_MANUAL,
+					     0, V4L2_EXPOSURE_MANUAL);
 	/* exposure */
 	ov5647->exposure = v4l2_ctrl_new_std(handler, &ov5647_ctrl_ops,
 					     V4L2_CID_EXPOSURE,
@@ -939,6 +1081,16 @@ static int ov5647_initialize_controls(struct v4l2_subdev *sd)
 			      OV5647_ANALOG_GAIN_MIN, OV5647_ANALOG_GAIN_MAX,
 			      OV5647_ANALOG_GAIN_STEP,
 			      OV5647_ANALOG_GAIN_DEFAULT);
+
+	ov5647->hflip = v4l2_ctrl_new_std(handler, &ov5647_ctrl_ops,
+					   V4L2_CID_HFLIP, 0, 1, 1, 0);
+	if (ov5647->hflip)
+		ov5647->hflip->flags |= V4L2_CTRL_FLAG_MODIFY_LAYOUT;
+
+	ov5647->vflip = v4l2_ctrl_new_std(handler, &ov5647_ctrl_ops,
+					   V4L2_CID_VFLIP, 0, 1, 1, 0);
+	if (ov5647->vflip)
+		ov5647->vflip->flags |= V4L2_CTRL_FLAG_MODIFY_LAYOUT;
 
 	if (handler->error) {
 		v4l2_ctrl_handler_free(handler);
@@ -991,7 +1143,7 @@ static int ov5647_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	/* Initialize try_fmt */
 	try_fmt->width = ov5647->cur_mode->width;
 	try_fmt->height = ov5647->cur_mode->height;
-	try_fmt->code = MEDIA_BUS_FMT_SBGGR8_1X8;
+	try_fmt->code = ov5647_get_mbus_code(sd);
 	try_fmt->field = V4L2_FIELD_NONE;
 
 	mutex_unlock(&ov5647->lock);
@@ -1003,28 +1155,51 @@ static const struct v4l2_subdev_internal_ops ov5647_subdev_internal_ops = {
 	.open = ov5647_open,
 };
 
-static int ov5647_parse_dt(struct v4l2_subdev *sd)
+static int ov5647_check_hwcfg(struct device *dev, struct ov5647_state *sensor)
 {
-	struct i2c_client *client = v4l2_get_subdevdata(sd);
-	struct v4l2_fwnode_endpoint bus_cfg = { .bus_type = 0 };
-	struct device_node *ep;
-	struct fwnode_handle *fwnode;
+	struct fwnode_handle *endpoint;
+	struct v4l2_fwnode_endpoint ep_cfg = {
+		.bus_type = V4L2_MBUS_CSI2_DPHY
+	};
+	int ret = -EINVAL;
 
-	int ret;
-
-	ep = of_graph_get_next_endpoint(client->dev.of_node, NULL);
-	if (!ep)
+	endpoint = fwnode_graph_get_next_endpoint(dev_fwnode(dev), NULL);
+	if (!endpoint) {
+		dev_err(dev, "endpoint node not found\n");
 		return -EINVAL;
-
-	fwnode = of_fwnode_handle(ep);
-		//lane num is fixed to 2. so just read, not use it.
-	ret = fwnode_property_read_u32_array(fwnode, "data-lanes", NULL, 0);
-	if (ret <= 0) {
-		dev_info (&client->dev, "[%d] lane - %d\n",__LINE__, ret);
 	}
-	ret = v4l2_fwnode_endpoint_parse(of_fwnode_handle(ep), &bus_cfg);
 
-	of_node_put(ep);
+	if (v4l2_fwnode_endpoint_alloc_parse(endpoint, &ep_cfg)) {
+		dev_err(dev, "could not parse endpoint\n");
+		goto error_out;
+	}
+
+	sensor->flags = ep_cfg.bus.mipi_csi2.flags;
+
+	/* Check the number of MIPI CSI2 data lanes */
+	if (ep_cfg.bus.mipi_csi2.num_data_lanes != 2) {
+		dev_err(dev, "only 2 data lanes are currently supported\n");
+		goto error_out;
+	}
+
+	/* Check the link frequency set in device tree */
+	if (!ep_cfg.nr_of_link_frequencies) {
+		dev_err(dev, "link-frequency property not found in DT\n");
+		goto error_out;
+	}
+
+	if (ep_cfg.nr_of_link_frequencies != 1 ||
+	    ep_cfg.link_frequencies[0] != OV5647_DEFAULT_LINK_FREQ) {
+		dev_err(dev, "Link frequency not supported: %lld\n",
+			ep_cfg.link_frequencies[0]);
+		goto error_out;
+	}
+
+	ret = 0;
+
+error_out:
+	v4l2_fwnode_endpoint_free(&ep_cfg);
+	fwnode_handle_put(endpoint);
 
 	return ret;
 }
@@ -1083,13 +1258,9 @@ static int ov5647_probe(struct i2c_client *client)
 	sd = &sensor->sd;
 	v4l2_i2c_subdev_init(sd, client, &ov5647_subdev_ops);
 
-	if (IS_ENABLED(CONFIG_OF) && sd) {
-		ret = ov5647_parse_dt(sd);
-		if (ret) {
-			dev_err(dev, "DT parsing error: %d\n", ret);
-			return ret;
-		}
-	}
+	/* Check the hardware configuration in device tree */
+	if (ov5647_check_hwcfg(dev, sensor))
+		return -EINVAL;
 
 	ret = ov5647_initialize_controls(sd);
 	if (ret)
