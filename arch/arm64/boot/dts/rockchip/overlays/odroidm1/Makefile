@@ -16,7 +16,8 @@ dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
 
 dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
 					ov5647.dtbo \
-					imx219.dtbo
+					imx219.dtbo \
+					imx477.dtbo
 
 targets += $(dtbo-y)
 always := $(dtbo-y)
