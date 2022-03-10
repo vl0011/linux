@@ -12,7 +12,7 @@ dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
 					pwm2-0.dtbo \
 					pwm2-1.dtbo \
 					pwm9.dtbo \
-					display-vu8m.dtbo
+					display_vu8m.dtbo
 
 dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
 					ov5647.dtbo \
