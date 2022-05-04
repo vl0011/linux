@@ -1,0 +1,19 @@
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/rockchip.h>
+
+/{
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			ov5647_irfilter: ov5647-irfilter {
+				compatible = "regulator-fixed";
+				enable-active-high;
+				gpio = <&gpio0 RK_PA0 GPIO_ACTIVE_HIGH>;
+				regulator-name = "ov5647_irfilter";
+			};
+		};
+	};
+};
