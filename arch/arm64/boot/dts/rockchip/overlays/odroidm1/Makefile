@@ -6,6 +6,7 @@ dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
 					gpio_shortcut.dtbo \
 					i2c0.dtbo \
 					i2c1.dtbo \
+					mcp2515.dtbo \
 					pwm1.dtbo \
 					pwm2.dtbo \
 					pwm9.dtbo \
