@@ -1741,22 +1741,19 @@ EXPORT_SYMBOL_GPL(analogix_dp_unbind);
 #ifdef CONFIG_PM
 int analogix_dp_suspend(struct analogix_dp_device *dp)
 {
-	if (dp->plat_data->panel) {
-		if (drm_panel_unprepare(dp->plat_data->panel))
-			DRM_ERROR("failed to turnoff the panel\n");
-	}
-
+	clk_disable_unprepare(dp->clock);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(analogix_dp_suspend);
 
 int analogix_dp_resume(struct analogix_dp_device *dp)
 {
-	if (dp->plat_data->panel) {
-		if (drm_panel_prepare(dp->plat_data->panel)) {
-			DRM_ERROR("failed to setup the panel\n");
-			return -EBUSY;
-		}
+	int ret;
+
+	ret = clk_prepare_enable(dp->clock);
+	if (ret < 0) {
+		DRM_ERROR("Failed to prepare_enable the clock clk [%d]\n", ret);
+		return ret;
 	}
 
 	return 0;
