@@ -777,7 +777,9 @@ static int ili9881c_unprepare(struct drm_panel *panel)
 	struct ili9881c *ctx = panel_to_ili9881c(panel);
 
 	mipi_dsi_dcs_enter_sleep_mode(ctx->dsi);
+#if !defined(CONFIG_ARCH_ROCKCHIP_ODROID_COMMON)
 	regulator_disable(ctx->power);
+#endif
 	gpiod_set_value(ctx->reset, 1);
 
 	return 0;
