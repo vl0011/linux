@@ -858,6 +858,36 @@ static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 	return 0;
 }
 
+#if defined(CONFIG_ARCH_ROCKCHIP_ODROID_COMMON)
+bool touch_flip_x = false;
+static int __init touch_flip_x_para_setup(char *s)
+{
+	if (!strncmp(s, "true", 4))
+		touch_flip_x = true;
+	else {
+		pr_err("%s - wrong touch_flip_x parameter", __func__);
+		touch_flip_x = true;
+	}
+
+	return 0;
+}
+__setup("touch_flip_x=", touch_flip_x_para_setup);
+
+bool touch_flip_y = false;
+static int __init touch_flip_y_para_setup(char *s)
+{
+	if (!strncmp(s, "true", 4))
+		touch_flip_y = true;
+	else {
+		pr_err("%s - wrong touch_flip_y parameter", __func__);
+		touch_flip_y = true;
+	}
+
+	return 0;
+}
+__setup("touch_flip_y=", touch_flip_y_para_setup);
+#endif
+
 static int mt_compute_slot(struct mt_device *td, struct mt_application *app,
 			   struct mt_usages *slot,
 			   struct input_dev *input)
@@ -1068,8 +1098,18 @@ static int mt_process_slot(struct mt_device *td, struct input_dev *input,
 			minor = minor >> 1;
 		}
 
-		input_event(input, EV_ABS, ABS_MT_POSITION_X, *slot->x);
-		input_event(input, EV_ABS, ABS_MT_POSITION_Y, *slot->y);
+#if defined(CONFIG_ARCH_ROCKCHIP_ODROID_COMMON)
+		if (touch_flip_x)
+			input_event(input, EV_ABS, ABS_MT_POSITION_X, input->absinfo[0].maximum - *slot->x);
+		else
+#endif
+			input_event(input, EV_ABS, ABS_MT_POSITION_X, *slot->x);
+#if defined(CONFIG_ARCH_ROCKCHIP_ODROID_COMMON)
+		if (touch_flip_y)
+			input_event(input, EV_ABS, ABS_MT_POSITION_Y, input->absinfo[1].maximum - *slot->y);
+		else
+#endif
+			input_event(input, EV_ABS, ABS_MT_POSITION_Y, *slot->y);
 		input_event(input, EV_ABS, ABS_MT_TOOL_X, *slot->cx);
 		input_event(input, EV_ABS, ABS_MT_TOOL_Y, *slot->cy);
 		input_event(input, EV_ABS, ABS_MT_DISTANCE, !*slot->tip_state);
