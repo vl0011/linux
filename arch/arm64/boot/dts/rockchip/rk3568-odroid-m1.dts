@@ -40,7 +40,7 @@
 };
 
 &can0 {
-	compatible = "rockchip,can-1.0";
+	compatible = "rockchip,rk3568-can-2.0";
 	pinctrl-names = "default";
 	pinctl-0 = <&can0m0_pins>;
 	status = "disabled";
