@@ -12,7 +12,7 @@
 #include "rk3568-odroid.dtsi"
 
 / {
-	model = "ODROID-M1";
+	model = "Hardkernel ODROID-M1";
 	compatible = "rockchip,rk3568";
 
 	vcc2v5_sys: vcc2v5-ddr {
