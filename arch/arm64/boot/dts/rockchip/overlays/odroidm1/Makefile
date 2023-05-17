@@ -18,9 +18,12 @@ dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
 					uart1.dtbo
 
 dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
+					oled_rtc.dtbo \
 					ov5647.dtbo \
 					ov5647_irfilter.dtbo \
 					pcf8563.dtbo \
+					rtc.dtbo \
+					ssd1306.dtbo \
 					imx219.dtbo \
 					imx477.dtbo
 
