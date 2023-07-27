@@ -1,0 +1,189 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2021 Hardkernel Co., Ltd.
+ *
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/rockchip.h>
+#include "rk3566.dtsi"
+#include "rk3566-odroid.dtsi"
+
+/ {
+	model = "Hardkernel ODROID-M1S";
+	compatible = "rockchip,rk3566";
+};
+
+&combphy1_usq {
+	status = "okay";
+};
+
+&combphy2_psq {
+	status = "okay";
+};
+
+&gpio0 {
+	gpio-line-names =
+		/* GPIO0_A */
+		"", "", "", "", "", "", "", "",
+		/* GPIO0_B */
+		"", "", "",
+		"PIN_28", /* GPIO0_B3 */
+		"PIN_27", /* GPIO0_B4 */
+		"PIN_33", /* GPIO0_B5 */
+		"PIN_7", /* GPIO0_B6 */
+		"",
+		/* GPIO0_C */
+		"PIN_11", /* GPIO0_C0 */
+		"PIN_13", /* GPIO0_C1 */
+		"PIN_15", /* GPIO0_C2 */
+		"", "", "", "", "",
+		/* GPIO0_D */
+		"", "", "", "", "", "", "", "";
+};
+
+&gpio1 {
+	gpio-line-names =
+		/* GPIO1_A */
+		"", "", "", "", "", "", "", "",
+		/* GPIO1_B */
+		"", "", "", "", "", "", "", "",
+		/* GPIO1_C */
+		"", "", "", "", "", "", "", "",
+		/* GPIO1_D */
+		"", "", "", "", "", "", "", "";
+};
+
+&gpio2 {
+	gpio-line-names =
+		/* GPIO2_A */
+		"", "", "",
+		"PIN_10", /* GPIO2_A3 */
+		"PIN_8", /* GPIO2_A4 */
+		"PIN_35", /* GPIO2_A5 */
+		"PIN_36", /* GPIO2_A6 */
+		"PIN_12", /* GPIO2_A7
+		/* GPIO2_B */
+		"PIN_22", /* GPIO2_B0 */
+		"PIN_26", /* GPIO2_B1 */
+		"PIN_32", /* GPIO2_B2 */
+		"",
+		"",
+		"PIN_16", /* GPIO2_B5 */
+		"PIN_18", /* GPIO2_B6 */
+		"PIN_31", /* GPIO2_B7 */
+		/* GPIO2_C */
+		"PIN_29", /* GPIO2_C0 */
+		"", "", "", "", "", "", "",
+		/* GPIO2_D */
+		"", "", "", "", "", "", "", "";
+};
+
+&gpio3 {
+	gpio-line-names =
+		/* GPIO3_A */
+		"",
+		"PIN_24", /* GPIO3_A1 */
+		"", "", "", "", "", "",
+		/* GPIO3_B */
+		"", "", "",
+		"EXTPIN_13", /* GPIO3_B3 */
+		"EXTPIN_14", /* GPIO3_B4 */
+		"PIN_5",  /* GPIO3_B5 */
+		"PIN_3",  /* GPIO3_B6 */
+		"",
+		/* GPIO3_C */
+		"",
+		"PIN_19", /* GPIO3_C1 */
+		"PIN_21", /* GPIO3_C2 */
+		"PIN_23", /* GPIO3_C3 */
+		"EXTPIN_11", /* GPIO3_C4 */
+		"EXTPIN_12", /* GPIO3_C5 */
+		"", "",
+		/* GPIO3_D */
+		"", "", "", "", "", "", "", "";
+};
+
+&gpio4 {
+	gpio-line-names =
+		/* GPIO4_A */
+		"", "", "", "", "", "", "", "",
+		/* GPIO4_B */
+		"", "", "", "", "", "", "", "",
+		/* GPIO4_C */
+		"", "", "", "", "", "", "", "",
+		/* GPIO4_D */
+		"", "", "", "", "", "", "", "";
+};
+
+&gmac1 {
+	phy-mode = "rgmii";
+	clock_in_out = "input";
+
+	snps,reset-gpio = <&gpio3 RK_PB7 GPIO_ACTIVE_LOW>;
+	snps,reset-active-low;
+	/* Reset time is 20ms, 100ms for rtl8211f */
+	snps,reset-delays-us = <0 20000 100000>;
+
+	assigned-clocks = <&cru SCLK_GMAC1_RX_TX>, <&cru SCLK_GMAC1>;
+	assigned-clock-parents = <&cru SCLK_GMAC1_RGMII_SPEED>, <&gmac1_clkin>;
+
+	pinctrl-names = "default";
+	pinctrl-0 = <&gmac1m1_miim
+		     &gmac1m1_tx_bus2
+		     &gmac1m1_rx_bus2
+		     &gmac1m1_rgmii_clk
+		     &gmac1m1_rgmii_bus
+		     &gmac1m1_clkinout>;
+
+	tx_delay = <0x4f>;
+	rx_delay = <0x2d>;
+
+	phy-handle = <&rgmii_phy1>;
+
+	status = "okay";
+};
+
+&mdio1 {
+	rgmii_phy1: phy@0 {
+		compatible = "ethernet-phy-ieee802.3-c22";
+		reg = <0x0>;
+	};
+};
+
+&pinctrl {
+	sii902x {
+		sii902x_hdmi_int: sii902x-hdmi-int {
+			rockchip,pins = <3 RK_PA0 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+};
+
+&pmu_io_domains {
+	pmuio2-supply = <&vcc3v3_pmu>;
+	vccio1-supply = <&vccio_acodec>;
+	vccio3-supply = <&vccio_sd>;
+	vccio4-supply = <&vcc_3v3>;
+	vccio5-supply = <&vcc_3v3>;
+	vccio6-supply = <&vcc_3v3>;
+	vccio7-supply = <&vcc_3v3>;
+};
+
+&route_dsi0 {
+	status = "disabled";
+	connect = <&vp1_out_dsi0>;
+};
+
+&bus_npu {
+	status = "disabled";
+};
+
+&rknpu {
+	status = "disabled";
+};
+
+&rknpu_mmu {
+	status = "disabled";
+};

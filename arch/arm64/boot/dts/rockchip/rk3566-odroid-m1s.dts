@@ -1,0 +1,67 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2023 Hardkernel Co., Ltd.
+ *
+ */
+
+#include "rk3566-odroid-m1s.dtsi"
+#include "rk3568-android.dtsi"
+
+/ {
+	aliases {
+		mmc0 = &sdhci;
+		mmc1 = &sdmmc0;
+		serial0 = &uart1;
+		serial1 = &uart0;
+		i2c0 = &i2c3;
+		i2c3 = &i2c0;
+	};
+};
+
+&combphy1_usq {
+	status = "okay";
+};
+
+&combphy2_psq {
+	status = "okay";
+};
+
+&i2c2 {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c2m1_xfer>;
+};
+
+&i2c3 {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c3m1_xfer>;
+};
+
+&pwm1 {
+	status = "disabled";
+	pinctrl-0 = <&pwm1m1_pins>;
+};
+
+&pwm2 {
+	status = "disabled";
+	pinctrl-0 = <&pwm2m1_pins>;
+};
+
+&spi0 {
+	status = "disabled";
+
+	pinctrl-0 = <&spi0m1_pins>;
+	pinctrl-1 = <&spi0m1_pins_hs>;
+	num_chipselect = <1>;
+
+	cs-gpios = <&gpio2 RK_PD2 GPIO_ACTIVE_LOW>;
+};
+
+&uart1 {
+	status = "disabled";
+	dma-names = "tx", "rx";
+	/* uart1 uart1-with-ctsrts */
+	pinctrl-0 = <&uart1m0_xfer>;
+	pinctrl-1 = <&uart1m0_xfer &uart1m0_ctsn &uart1m0_rtsn>;
+};
