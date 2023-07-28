@@ -119,3 +119,4 @@ dtb-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += rk3568-odroid-m1.dtb
 dtb-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += rk3566-odroid-m1s.dtb
 
 subdir-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += overlays/odroidm1
+subdir-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += overlays/odroidm1s
