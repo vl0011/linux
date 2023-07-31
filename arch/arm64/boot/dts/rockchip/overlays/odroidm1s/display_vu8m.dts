@@ -181,4 +181,18 @@
 			status = "okay";
 		};
 	};
+	fragment@11 {
+		target = <&vp0>;
+		__overlay__ {
+			rockchip,plane-mask = <0x2a>;
+			rockchip,primary-plane = <0x5>;
+		};
+	};
+	fragment@12 {
+		target = <&vp1>;
+		__overlay__ {
+			rockchip,plane-mask = <0x15>;
+			rockchip,primary-plane = <0x4>;
+		};
+	};
 };
