@@ -3,8 +3,8 @@
 
 / {
 	fragment@0 {
-		// pwmchip3, pwm@fe6f0010
-		target = <&pwm9>;
+		// pwmchip2, pwm@fdd70030
+		target = <&pwm3>;
 
 		__overlay__ {
 			status = "okay";

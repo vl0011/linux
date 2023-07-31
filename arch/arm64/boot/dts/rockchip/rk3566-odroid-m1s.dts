@@ -11,10 +11,13 @@
 	aliases {
 		mmc0 = &sdhci;
 		mmc1 = &sdmmc0;
-		serial0 = &uart1;
+		serial0 = &uart6;
 		serial1 = &uart0;
+		serial6 = &uart1;
 		i2c0 = &i2c3;
 		i2c3 = &i2c0;
+		spi0 = &spi1;
+		spi1 = &spi0;
 	};
 };
 
@@ -48,20 +51,20 @@
 	pinctrl-0 = <&pwm2m1_pins>;
 };
 
-&spi0 {
+&spi1 {
 	status = "disabled";
 
-	pinctrl-0 = <&spi0m1_pins>;
-	pinctrl-1 = <&spi0m1_pins_hs>;
+	pinctrl-0 = <&spi1m1_pins>;
+	pinctrl-1 = <&spi1m1_pins_hs>;
 	num_chipselect = <1>;
 
-	cs-gpios = <&gpio2 RK_PD2 GPIO_ACTIVE_LOW>;
+	cs-gpios = <&gpio3 RK_PA1 GPIO_ACTIVE_LOW>;
 };
 
-&uart1 {
+&uart6 {
 	status = "disabled";
 	dma-names = "tx", "rx";
-	/* uart1 uart1-with-ctsrts */
-	pinctrl-0 = <&uart1m0_xfer>;
-	pinctrl-1 = <&uart1m0_xfer &uart1m0_ctsn &uart1m0_rtsn>;
+	/* uart6 uart6-with-ctsrts */
+	pinctrl-0 = <&uart6m0_xfer>;
+	pinctrl-1 = <&uart6m0_xfer &uart6m0_ctsn &uart6m0_rtsn>;
 };

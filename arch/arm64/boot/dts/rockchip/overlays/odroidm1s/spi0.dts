@@ -3,7 +3,8 @@
 
 / {
 	fragment@0 {
-		target = <&spi0>;
+		// spi1 aliased with spi0.
+		target = <&spi1>;
 
 		__overlay__ {
 			status = "okay";

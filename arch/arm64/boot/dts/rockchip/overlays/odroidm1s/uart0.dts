@@ -3,8 +3,8 @@
 
 / {
 	fragment@0 {
-		// uart1 aliased with serial0.
-		target = <&uart1>;
+		// uart6 aliased with serial0.
+		target = <&uart6>;
 
 		__overlay__ {
 			status = "okay";
