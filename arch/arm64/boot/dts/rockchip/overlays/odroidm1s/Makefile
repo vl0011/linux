@@ -1,7 +1,7 @@
 # Overlays for the Odroid platform
 
 dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
-					display_vu8m.dtbo \
+					display_vu8s.dtbo \
 					gpio_shortcut.dtbo \
 					i2c0.dtbo \
 					i2c1.dtbo \
