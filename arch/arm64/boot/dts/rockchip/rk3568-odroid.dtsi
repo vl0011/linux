@@ -86,7 +86,6 @@
 		status = "okay";
 		compatible = "simple-audio-card";
 		simple-audio-card,format = "i2s";
-		simple-audio-card,hp-det-gpio = <&gpio0 RK_PB0 GPIO_ACTIVE_HIGH>;
 		simple-audio-card,name = "rockchip,rk809-codec";
 		simple-audio-card,mclk-fs = <256>;
 
@@ -100,7 +99,7 @@
 
 	rk_headset: rk-headset {
 		compatible = "rockchip_headset";
-		headset_gpio = <&gpio0 RK_PB0 GPIO_ACTIVE_LOW>;
+		headset_gpio = <&gpio0 RK_PB0 GPIO_ACTIVE_HIGH>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&hp_det>;
 	};
