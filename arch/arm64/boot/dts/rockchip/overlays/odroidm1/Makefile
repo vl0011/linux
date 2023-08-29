@@ -26,7 +26,8 @@ dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
 					rtc.dtbo \
 					ssd1306.dtbo \
 					imx219.dtbo \
-					imx477.dtbo
+					imx477.dtbo \
+					weather_board_zero.dtbo
 
 targets += $(dtbo-y)
 always := $(dtbo-y)

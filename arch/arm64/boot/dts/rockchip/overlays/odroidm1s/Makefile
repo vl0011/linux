@@ -22,7 +22,8 @@ dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
 					oled_rtc.dtbo \
 					pcf8563.dtbo \
 					rtc.dtbo \
-					ssd1306.dtbo
+					ssd1306.dtbo \
+					weather_board_zero.dtbo
 
 targets += $(dtbo-y)
 always := $(dtbo-y)
