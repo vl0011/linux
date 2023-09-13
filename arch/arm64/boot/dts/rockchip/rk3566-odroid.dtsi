@@ -812,8 +812,14 @@
 	status = "okay";
 };
 
+&u2phy1_otg {
+	phy-supply = <&vcc5v0_usb2>;
+	status = "okay";
+};
+
 &usb2phy0 {
 	status = "okay";
+	pinctrl-names = "default";
 };
 
 &usb2phy1 {
