@@ -891,7 +891,7 @@
 
 &vp0 {
 	rockchip,plane-mask = <0x3f>;
-	rockchip,primary-plane = <5>;
+	rockchip,primary-plane = <4>;
 };
 
 &vop_mmu {
