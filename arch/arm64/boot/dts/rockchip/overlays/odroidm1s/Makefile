@@ -15,7 +15,8 @@ dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
 					spi0.dtbo \
 					uart0-with-ctsrts.dtbo \
 					uart0.dtbo \
-					uart1.dtbo
+					uart1.dtbo \
+					uart3.dtbo
 
 dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
 					oled_rtc.dtbo \
