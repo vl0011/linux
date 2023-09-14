@@ -58,6 +58,14 @@
 	status = "okay";
 };
 
+&dmc {
+	status = "disabled";
+};
+
+&dmc_fsp {
+	status = "disabled";
+};
+
 &i2c3 {
 	status = "disabled";
 	pinctrl-names = "default";
