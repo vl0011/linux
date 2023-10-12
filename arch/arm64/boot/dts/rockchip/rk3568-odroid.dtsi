@@ -900,6 +900,11 @@
 	assigned-clock-parents = <&pmucru PLL_HPLL>, <&cru PLL_VPLL>;
 };
 
+&vp0 {
+	rockchip,plane-mask = <0x3f>;
+	rockchip,primary-plane = <4>;
+};
+
 &vop_mmu {
 	status = "okay";
 };
