@@ -194,3 +194,4 @@ obj-$(CONFIG_RK_FLASH)		+= rkflash/
 obj-$(CONFIG_ROCKCHIP_RKNPU)	+= rknpu/
 
 obj-y				+= vendor/
+obj-$(CONFIG_ODROID_SYSFS)	+= hardkernel/
