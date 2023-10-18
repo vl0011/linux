@@ -231,4 +231,5 @@ source "drivers/headset_observe/Kconfig"
 
 source "drivers/rknpu/Kconfig"
 
+source "drivers/hardkernel/Kconfig"
 endmenu
