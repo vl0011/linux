@@ -197,4 +197,37 @@
 			rockchip,primary-plane = <0x4>;
 		};
 	};
+
+	fragment@13 {
+		target = <&route_hdmi>;
+
+		__overlay__ {
+			status = "disabled";
+			connect = <&vp0_out_hdmi>;
+		};
+	};
+
+	fragment@13 {
+		target = <&hdmi>;
+
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@14 {
+		target = <&hdmi_in_vp0>;
+
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@15 {
+		target = <&hdmi_sound>;
+
+		__overlay__ {
+			status = "disabled";
+		};
+	};
 };
