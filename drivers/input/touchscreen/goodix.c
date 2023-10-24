@@ -258,10 +258,15 @@ static int orientation = -1;
 static  int __init orientation_setup(char *s)
 {
 	// The default orientation is portrait.
+	long digit = 0;
+	int ret = -1;
 	orientation = 0;
+	//printk("orientation_setup(%s)\n", s);
 
-	if (!(strcmp(s, "landscape")))
-		orientation = 5;
+	ret = kstrtol(s, 10, &digit);
+	if (ret == 0)
+		orientation = (long)digit;
+	//printk("orientation = %d\n", orientation);
 
 	set_coordiante_correction(orientation);
 
