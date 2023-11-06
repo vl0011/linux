@@ -2102,14 +2102,6 @@ retry_regulator:
 
 	dw_pcie_dbi_ro_wr_dis(pci);
 
-	rk_pcie->hot_rst_wq = create_singlethread_workqueue("rk_pcie_hot_rst_wq");
-	if (!rk_pcie->hot_rst_wq) {
-		dev_err(dev, "failed to create hot_rst workqueue\n");
-		ret = -ENOMEM;
-		goto remove_irq_domain;
-	}
-	INIT_WORK(&rk_pcie->hot_rst_work, rk_pcie_hot_rst_work);
-
 	device_init_wakeup(dev, true);
 
 	/* Enable async system PM for multiports SoC */
