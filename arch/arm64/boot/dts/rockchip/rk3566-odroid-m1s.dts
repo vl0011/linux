@@ -302,6 +302,8 @@
 &gpu {
 	mali-supply = <&vdd_gpu>;
 	status = "okay";
+	interrupt-names = "gpu", "mmu", "job";
+	clock-names = "gpu", "bus";
 };
 
 &display_subsystem {

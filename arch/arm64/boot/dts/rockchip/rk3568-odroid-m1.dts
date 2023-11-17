@@ -272,6 +272,11 @@
 		"", "", "", "", "", "", "", "";
 };
 
+&gpu {
+	interrupt-names = "gpu", "mmu", "job";
+	clock-names = "gpu", "bus";
+};
+
 &hdmi_sound {
 	simple-audio-card,name = "ODROID-M1-HDMI";
 	status = "okay";
