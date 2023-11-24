@@ -282,6 +282,10 @@ static const char * const fw_path[] = {
 	"/lib/firmware/updates/" UTS_RELEASE,
 	"/lib/firmware/updates",
 	"/lib/firmware/" UTS_RELEASE,
+#if defined(CONFIG_ARCH_ROCKCHIP_ODROID_COMMON)
+/* For ODROID Android path */
+	"/fat",
+#endif
 	"/lib/firmware"
 };
 
