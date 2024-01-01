@@ -1548,7 +1548,9 @@ static int rockchip_drm_bind(struct device *dev)
 	if (ret)
 		DRM_DEBUG_KMS("No reserved memory region assign to drm\n");
 
+#if !defined(CONFIG_ARCH_ROCKCHIP_ODROID_COMMON)
 	rockchip_drm_show_logo(drm_dev);
+#endif
 
 	ret = rockchip_drm_fbdev_init(drm_dev);
 	if (ret)
