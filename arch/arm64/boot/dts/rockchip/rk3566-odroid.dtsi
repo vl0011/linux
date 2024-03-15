@@ -119,8 +119,8 @@
 //		pinctrl-0 = <&hp_det>;
 	};
 
-	spdif-sound {
-		status = "okay";
+	spdif_sound: spdif-sound {
+		status = "disabled";
 		compatible = "simple-audio-card";
 		simple-audio-card,name = "ROCKCHIP,SPDIF";
 		simple-audio-card,cpu {

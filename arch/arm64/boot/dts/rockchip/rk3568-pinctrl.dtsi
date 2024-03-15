@@ -2208,7 +2208,6 @@
 				<1 RK_PA4 4 &pcfg_pull_none>;
 		};
 
-		/omit-if-no-ref/
 		spdifm1_tx: spdifm1-tx {
 			rockchip,pins =
 				/* spdifm1_tx */
