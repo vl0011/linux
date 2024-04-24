@@ -120,7 +120,7 @@ struct goodix_input_report {
 #define GOODIX_INT_TRIGGER		1
 #define GOODIX_CONTACT_SIZE		8
 #define GOODIX_MAX_CONTACT_SIZE		9
-#define GOODIX_MAX_CONTACTS		10
+#define GOODIX_MAX_CONTACTS		11
 #define GOODIX_MAX_KEYS			7
 
 #define GOODIX_CONFIG_MIN_LENGTH	186
@@ -177,6 +177,7 @@ struct goodix_chip_id {
 struct goodix_ts_data {
 	struct i2c_client *client;
 	struct input_dev *input_dev;
+	struct input_dev *pen_dev;
 	const struct goodix_chip_data *chip;
 	struct touchscreen_properties prop;
 	unsigned int max_touch_num;
@@ -462,6 +463,7 @@ static void goodix_populate_report(struct goodix_ts_data *ts, u8 *data, struct g
 }
 
 /* End: Adding this function to work with the goodix_input_report struct (Adya) */
+
 static int goodix_ts_read_input_report(struct goodix_ts_data *ts, u8 *data)
 {
 	unsigned long max_timeout;
@@ -519,32 +521,57 @@ static int goodix_ts_read_input_report(struct goodix_ts_data *ts, u8 *data)
 	return -ENOMSG;
 }
 
-static void goodix_ts_report_touch_8b(struct goodix_ts_data *ts, u8 *coor_data,
-		struct goodix_input_report *report)
+/**
+ * Modified version of the original goodix_ts_report_touch in order to make
+ *   use of the goodix_input_report struct and to report the inputs to the
+ *   correct logical devices.
+ *   (as we have two of these: one for the touchscreen and one for the pen)
+ */
+static void goodix_ts_report_mt_slots(struct goodix_ts_data *ts,
+	struct goodix_input_report *report)
 {
-	int id = coor_data[0] & 0x0F;
+	int i;
 	struct goodix_point *point = report->points;
+	u16 cur_touch = 0;
+	static u16 prev_touch;
 
-	input_mt_slot(ts->input_dev, id);
-	input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, true);
-	touchscreen_report_pos(ts->input_dev, &ts->prop,
-			point->x, point->y, true);
-	input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, point->w);
-	input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, point->w);
-}
+	for (i = 0; i < GOODIX_MAX_CONTACTS; i++) {
+		if (report->touch_num && i == point->id) {
+			if (point->tool_type == GOODIX_TOOL_PEN) {
+				input_mt_slot(ts->pen_dev, point->id);
+				input_mt_report_slot_state(ts->pen_dev, MT_TOOL_PEN, true);
+				touchscreen_report_pos(ts->pen_dev, &ts->prop,
+									point->x, point->y, true);
+				input_report_abs(ts->pen_dev, ABS_MT_TOUCH_MAJOR, point->w);
+				input_report_abs(ts->pen_dev, ABS_MT_PRESSURE, point->w);
+			} else {
+				input_mt_slot(ts->input_dev, point->id);
+				input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, true);
+				touchscreen_report_pos(ts->input_dev, &ts->prop,
+									point->x, point->y, true);
+				input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, point->w);
+				input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, point->w);
+			}
 
-static void goodix_ts_report_touch_9b(struct goodix_ts_data *ts, u8 *coor_data,
-		struct goodix_input_report *report)
-{
-	int id = coor_data[1] & 0x0F;
-	struct goodix_point *point = report->points;
+			cur_touch |= (0b1 << point->id);
+			point++;
+		}
+		else if (prev_touch & (0b1 << i)) {
+			if (i == GOODIX_STYLUS_POINT_ID) {
+				input_mt_slot(ts->pen_dev, i);
+				input_mt_report_slot_state(ts->pen_dev, MT_TOOL_PEN, false);
+			} else {
+				input_mt_slot(ts->input_dev, i);
+				input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, false);
+			}
+		}
+	}
 
-	input_mt_slot(ts->input_dev, id);
-	input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, true);
-	touchscreen_report_pos(ts->input_dev, &ts->prop,
-			point->x, point->y, true);
-	input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, point->w);
-	input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, point->w);
+	input_mt_sync_frame(ts->pen_dev);
+	input_sync(ts->pen_dev);
+	input_mt_sync_frame(ts->input_dev);
+	input_sync(ts->input_dev);
+	prev_touch = cur_touch;
 }
 
 static void goodix_ts_report_key(struct goodix_ts_data *ts, u8 *data)
@@ -581,7 +608,7 @@ static void goodix_process_events(struct goodix_ts_data *ts)
 	struct goodix_input_report report = { .points = points };
 
 	int touch_num;
-	int i;
+	static u8 prev_keys = 0;
 
 	touch_num = goodix_ts_read_input_report(ts, point_data);
 	if (touch_num < 0)
@@ -591,16 +618,21 @@ static void goodix_process_events(struct goodix_ts_data *ts)
 
 	goodix_ts_report_key(ts, point_data);
 
-	for (i = 0; i < touch_num; i++)
-		if (ts->contact_size == 9)
-			goodix_ts_report_touch_9b(ts,
-				&point_data[1 + ts->contact_size * i], &report);
-		else
-			goodix_ts_report_touch_8b(ts,
-				&point_data[1 + ts->contact_size * i], &report);
+	/*
+	 * Note: Stylus buttons' state is only reported when the tip of the pen
+	 * is in contact with the touchscreen frame. I didn't notice this until
+	 * now and find it quite weird. Is it supposed to work this way ?
+	 * (Apparently it does not work like that on every Goodix device)
+	 */
+	if (GOODIX_KEYDOWN_EVENT(report.keys) || GOODIX_KEYDOWN_EVENT(prev_keys)) {
+		input_report_key(ts->pen_dev, BTN_STYLUS,
+			GOODIX_IS_STYLUS_BTN_DOWN(report.keys, GOODIX_STYLUS_BTN1));
+		input_report_key(ts->pen_dev, BTN_STYLUS2,
+			GOODIX_IS_STYLUS_BTN_DOWN(report.keys, GOODIX_STYLUS_BTN2));
+		prev_keys = report.keys;
+	}
 
-	input_mt_sync_frame(ts->input_dev);
-	input_sync(ts->input_dev);
+	goodix_ts_report_mt_slots(ts, &report);
 }
 
 /**
@@ -1103,7 +1135,8 @@ retry_get_irq_gpio:
  *
  * Must be called during probe
  */
-static void goodix_read_config(struct goodix_ts_data *ts)
+static void goodix_read_config(struct goodix_ts_data *ts,
+	struct input_dev *dev)
 {
 	int x_max, y_max;
 	int error;
@@ -1124,8 +1157,8 @@ static void goodix_read_config(struct goodix_ts_data *ts)
 	x_max = get_unaligned_le16(&ts->config[RESOLUTION_LOC]);
 	y_max = get_unaligned_le16(&ts->config[RESOLUTION_LOC + 2]);
 	if (x_max && y_max) {
-		input_abs_set_max(ts->input_dev, ABS_MT_POSITION_X, x_max - 1);
-		input_abs_set_max(ts->input_dev, ABS_MT_POSITION_Y, y_max - 1);
+		input_abs_set_max(dev, ABS_MT_POSITION_X, x_max - 1);
+		input_abs_set_max(dev, ABS_MT_POSITION_Y, y_max - 1);
 	}
 
 	ts->chip->calc_config_checksum(ts);
@@ -1256,6 +1289,9 @@ static int goodix_configure_dev(struct goodix_ts_data *ts)
 	ts->input_dev->keycodesize = sizeof(ts->keymap[0]);
 	ts->input_dev->keycodemax = GOODIX_MAX_KEYS;
 
+	ts->input_dev->evbit[0] |= BIT_MASK(EV_SYN)
+		| BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
+
 	/* Capacitive Windows/Home button on some devices */
 	for (i = 0; i < GOODIX_MAX_KEYS; ++i) {
 		if (i == 0)
@@ -1273,7 +1309,7 @@ static int goodix_configure_dev(struct goodix_ts_data *ts)
 
 retry_read_config:
 	/* Read configuration and apply touchscreen parameters */
-	goodix_read_config(ts);
+	goodix_read_config(ts, ts->input_dev);
 
 	/* Try overriding touchscreen parameters via device properties */
 	touchscreen_parse_properties(ts->input_dev, true, &ts->prop);
@@ -1281,7 +1317,10 @@ retry_read_config:
 	if (!ts->prop.max_x || !ts->prop.max_y || !ts->max_touch_num) {
 		if (!ts->reset_controller_at_probe &&
 		    ts->irq_pin_access_method != IRQ_PIN_ACCESS_NONE) {
-			dev_info(&ts->client->dev, "Config not set, resetting controller\n");
+			//dev_info(&ts->client->dev, "Config not set, resetting controller\n");
+			dev_err(&ts->client->dev,
+			"Invalid config (%d, %d, %d), using defaults\n",
+			ts->prop.max_x, ts->prop.max_y, ts->max_touch_num);
 			/* Retry after a controller reset */
 			ts->reset_controller_at_probe = true;
 			error = goodix_reset(ts);
@@ -1342,6 +1381,99 @@ retry_read_config:
 }
 
 /**
+ * Adding this function to add a new logical device that will be solely
+ *   focused on handling inputs that are recognized by the controller
+ *   as being originated by an active pen/stylus.
+ */
+
+static int goodix_configure_pen_dev(struct goodix_ts_data *ts)
+{
+	int error;
+
+	ts->pen_dev = devm_input_allocate_device(&ts->client->dev);
+	if (!ts->pen_dev) {
+		dev_err(&ts->client->dev, "Failed to allocate pen device.");
+		return -ENOMEM;
+	}
+
+	ts->pen_dev->name = "Goodix Active Stylus Pen";
+	ts->pen_dev->phys = "input/pen";
+	ts->pen_dev->id.bustype = BUS_I2C;
+	ts->pen_dev->id.vendor = 0x0416;
+	if (kstrtou16(ts->id, 10, &ts->pen_dev->id.product))
+		ts->pen_dev->id.product = 0x1001;
+	ts->pen_dev->id.version = ts->version;
+
+	ts->pen_dev->evbit[0] |= BIT_MASK(EV_SYN)
+		| BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
+
+	__set_bit(BTN_STYLUS, ts->pen_dev->keybit);
+	__set_bit(BTN_STYLUS2, ts->pen_dev->keybit);
+
+	/* Capacitive Windows/Home button on some devices */
+	input_set_capability(ts->pen_dev, EV_KEY, KEY_LEFTMETA);
+	input_set_capability(ts->pen_dev, EV_KEY, BTN_STYLUS);
+	input_set_capability(ts->pen_dev, EV_KEY, BTN_STYLUS2);
+
+	input_set_capability(ts->pen_dev, EV_ABS, ABS_MT_POSITION_X);
+	input_set_capability(ts->pen_dev, EV_ABS, ABS_MT_POSITION_Y);
+	input_set_abs_params(ts->pen_dev, ABS_MT_WIDTH_MAJOR, 0, 255, 0, 0);
+	input_set_abs_params(ts->pen_dev, ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0);
+	input_set_abs_params(ts->pen_dev, ABS_MT_PRESSURE, 0, 1024, 0, 0);
+	input_set_abs_params(ts->pen_dev, ABS_MT_TOOL_TYPE, 0, MT_TOOL_MAX, 0, 0);
+
+	goodix_read_config(ts, ts->pen_dev);
+
+	/* Try overriding touchscreen parameters via device properties */
+	touchscreen_parse_properties(ts->pen_dev, true, &ts->prop);
+
+	if (!ts->prop.max_x || !ts->prop.max_y || !ts->max_touch_num) {
+		dev_err(&ts->client->dev,
+			"Invalid config (%d, %d, %d), using defaults\n",
+			ts->prop.max_x, ts->prop.max_y, ts->max_touch_num);
+		ts->prop.max_x = GOODIX_MAX_WIDTH - 1;
+		ts->prop.max_y = GOODIX_MAX_HEIGHT - 1;
+		ts->max_touch_num = GOODIX_MAX_CONTACTS;
+		input_abs_set_max(ts->pen_dev,
+				ABS_MT_POSITION_X, ts->prop.max_x);
+		input_abs_set_max(ts->pen_dev,
+					ABS_MT_POSITION_Y, ts->prop.max_y);
+	}
+
+	if (dmi_check_system(nine_bytes_report)) {
+		ts->contact_size = 9;
+
+		dev_dbg(&ts->client->dev,
+			"Non-standard 9-bytes report format quirk\n");
+	}
+
+	if (dmi_check_system(inverted_x_screen)) {
+		ts->prop.invert_x = true;
+		dev_dbg(&ts->client->dev,
+			"Applying 'inverted x screen' quirk\n");
+	}
+
+	goodix_apply_corrections(ts, ts->pen_dev);
+
+	error = input_mt_init_slots(ts->pen_dev, ts->max_touch_num,
+						INPUT_MT_DIRECT | INPUT_MT_DROP_UNUSED);
+	if (error) {
+		dev_err(&ts->client->dev,
+			"Failed to initialize MT slots: %d", error);
+		return error;
+	}
+
+	error = input_register_device(ts->pen_dev);
+	if (error) {
+		dev_err(&ts->client->dev,
+			"Failed to register pen device: %d", error);
+		return error;
+	}
+
+	return 0;
+}
+
+/**
  * goodix_config_cb - Callback to finish device init
  *
  * @ts: our goodix_ts_data pointer
@@ -1362,6 +1494,7 @@ static void goodix_config_cb(const struct firmware *cfg, void *ctx)
 	}
 
 	goodix_configure_dev(ts);
+	goodix_configure_pen_dev(ts);
 
 err_release_cfg:
 	release_firmware(cfg);
@@ -1484,6 +1617,11 @@ reset:
 		error = goodix_configure_dev(ts);
 		if (error)
 			return error;
+
+		error = goodix_configure_pen_dev(ts);
+		if (error)
+			return error;
+
 	}
 
 	return 0;
