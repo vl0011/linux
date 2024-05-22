@@ -15,7 +15,7 @@
 		target = <&backlight>;
 		__overlay__ {
 			status = "okay";
-			pwms = <&pwm1 0 25000 0>;
+			pwms = <&pwm1 0 43478 0>;
 		};
 	};
 };

@@ -16,7 +16,8 @@ dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
 					spi0.dtbo \
 					uart0-with-ctsrts.dtbo \
 					uart0.dtbo \
-					uart1.dtbo
+					uart1.dtbo \
+					pwm_backlight_for_vu12.dtbo
 
 dtbo-$(CONFIG_ARCH_ROCKCHIP_ODROIDM1) += \
 					oled_rtc.dtbo \
